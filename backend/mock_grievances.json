@@ -1,0 +1,122 @@
+[
+  {
+    "complaint_id": "GRV-1001",
+    "location": "Ghazipur Landfill (East Delhi)",
+    "district": "East",
+    "type": "Waste Burning",
+    "description": "Thick smoke observed from open waste burning at Ghazipur landfill site. Residents report severe breathing difficulty.",
+    "timestamp": "2025-01-15T08:30:00"
+  },
+  {
+    "complaint_id": "GRV-1002",
+    "location": "NH-24 Flyover Construction (East Delhi)",
+    "district": "East",
+    "type": "Construction Dust",
+    "description": "Heavy dust clouds from ongoing flyover construction on NH-24. No water sprinkling being done.",
+    "timestamp": "2025-01-15T09:15:00"
+  },
+  {
+    "complaint_id": "GRV-1003",
+    "location": "Anand Vihar Bus Terminal",
+    "district": "East",
+    "type": "Vehicular Traffic",
+    "description": "Massive traffic congestion with heavy diesel trucks idling near Anand Vihar ISBT causing visible exhaust haze.",
+    "timestamp": "2025-01-15T07:45:00"
+  },
+  {
+    "complaint_id": "GRV-1004",
+    "location": "Okhla Industrial Area Phase-II",
+    "district": "South East",
+    "type": "Industrial Emission",
+    "description": "Multiple factories emitting dark smoke from chimneys in the industrial belt. Strong chemical odor reported.",
+    "timestamp": "2025-01-15T10:00:00"
+  },
+  {
+    "complaint_id": "GRV-1005",
+    "location": "Bhalswa Landfill (North Delhi)",
+    "district": "North",
+    "type": "Waste Burning",
+    "description": "Fire spotted at Bhalswa landfill. Smoke drifting towards residential areas of Jahangirpuri.",
+    "timestamp": "2025-01-15T06:20:00"
+  },
+  {
+    "complaint_id": "GRV-1006",
+    "location": "Dwarka Expressway Construction",
+    "district": "South West",
+    "type": "Construction Dust",
+    "description": "Large-scale construction work on Dwarka Expressway raising dust. Visibility reduced for commuters.",
+    "timestamp": "2025-01-15T11:00:00"
+  },
+  {
+    "complaint_id": "GRV-1007",
+    "location": "ITO Junction",
+    "district": "Central",
+    "type": "Vehicular Traffic",
+    "description": "Severe traffic jam at ITO crossing. Hundreds of vehicles idling, creating a thick smog pocket.",
+    "timestamp": "2025-01-15T08:00:00"
+  },
+  {
+    "complaint_id": "GRV-1008",
+    "location": "Mundka Industrial Area",
+    "district": "West",
+    "type": "Industrial Emission",
+    "description": "Small-scale manufacturing units operating without pollution control equipment. Dark smoke visible.",
+    "timestamp": "2025-01-15T09:30:00"
+  },
+  {
+    "complaint_id": "GRV-1009",
+    "location": "Tughlaqabad (South Delhi)",
+    "district": "South",
+    "type": "Waste Burning",
+    "description": "Open burning of plastic and household waste in vacant plots near Tughlaqabad village.",
+    "timestamp": "2025-01-15T07:00:00"
+  },
+  {
+    "complaint_id": "GRV-1010",
+    "location": "Pragati Maidan Metro Construction",
+    "district": "Central",
+    "type": "Construction Dust",
+    "description": "Metro phase 4 construction near Pragati Maidan generating significant dust pollution. No barriers installed.",
+    "timestamp": "2025-01-15T10:30:00"
+  },
+  {
+    "complaint_id": "GRV-1011",
+    "location": "Wazirpur Industrial Area",
+    "district": "North West",
+    "type": "Industrial Emission",
+    "description": "Steel re-rolling mills and pickling units releasing fumes without scrubbers. Workers also affected.",
+    "timestamp": "2025-01-15T08:45:00"
+  },
+  {
+    "complaint_id": "GRV-1012",
+    "location": "GT Road (Shahdara Side)",
+    "district": "Shahdara",
+    "type": "Vehicular Traffic",
+    "description": "Continuous flow of heavy commercial vehicles on GT Road. Road dust combined with exhaust creating poor visibility.",
+    "timestamp": "2025-01-15T06:30:00"
+  },
+  {
+    "complaint_id": "GRV-1013",
+    "location": "Narela Industrial Zone",
+    "district": "North",
+    "type": "Industrial Emission",
+    "description": "Unauthorized brick kilns operating near Narela. Thick black smoke rising from multiple sites.",
+    "timestamp": "2025-01-15T05:00:00"
+  },
+  {
+    "complaint_id": "GRV-1014",
+    "location": "Najafgarh Drain (South West Delhi)",
+    "district": "South West",
+    "type": "Waste Burning",
+    "description": "Agricultural residue and garbage burning along Najafgarh drain banks. Smoke engulfing nearby colonies.",
+    "timestamp": "2025-01-15T07:15:00"
+  },
+  {
+    "complaint_id": "GRV-1015",
+    "location": "Rohini Sector 22 (North West Delhi)",
+    "district": "North West",
+    "type": "Construction Dust",
+    "description": "Multi-storey residential construction without dust-control sheets. Fine particles settling on nearby homes.",
+    "timestamp": "2025-01-15T12:00:00"
+  }
+]
