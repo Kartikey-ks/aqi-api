@@ -10,5 +10,5 @@ langgraph
 langchain-google-genai
 langchain-groq
 langchain-core
-python-dotenv
 langchain
+python-dotenv
