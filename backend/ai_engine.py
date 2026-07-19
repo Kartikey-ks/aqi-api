@@ -22,7 +22,7 @@ class CityState(TypedDict):
 def anomaly_detector_node(state: CityState) -> dict:
     """Analyze sensor data for hazardous AQI/PM2.5 levels using an LLM."""
     llm = ChatGroq(
-        model="llama3-70b-8192",
+        model="llama-3.3-70b-versatile",
         temperature=0,
         api_key=os.environ.get("GROQ_API_KEY"),
     )
@@ -60,7 +60,7 @@ def anomaly_detector_node(state: CityState) -> dict:
 def source_attributor_node(state: CityState) -> dict:
     """Use atmospheric dispersion reasoning to identify the pollution source."""
     llm = ChatGroq(
-        model="llama3-70b-8192",
+        model="llama-3.3-70b-versatile",
         temperature=0,
         api_key=os.environ.get("GROQ_API_KEY"),
     )
@@ -117,7 +117,7 @@ def source_attributor_node(state: CityState) -> dict:
 def enforcement_agent_node(state: CityState) -> dict:
     """Generate a municipal enforcement dispatch order based on the identified source."""
     llm = ChatGroq(
-        model="llama3-70b-8192",
+        model="llama-3.3-70b-versatile",
         temperature=0,
         api_key=os.environ.get("GROQ_API_KEY"),
     )
