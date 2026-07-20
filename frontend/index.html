@@ -223,6 +223,24 @@
   .grievance-type.construction { background: rgba(255,152,0,0.15); color: #FF9800; }
   .grievance-type.traffic { background: rgba(255,193,7,0.15); color: #FFC107; }
   .grievance-type.industrial { background: rgba(123,31,162,0.15); color: #CE93D8; }
+  .grievance-type.unknown { background: rgba(255,255,255,0.08); color: var(--text-dim); }
+
+  .zone-score-legend { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-dim); margin-bottom: 4px; }
+  .zone-score-track {
+    display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 4px;
+    background: var(--surface); border: 1px solid var(--border);
+  }
+  .zone-score-fill.construction { background: #FF9800; }
+  .zone-score-fill.traffic { background: #FFC107; }
+
+  .zone-list { margin-top: 8px; }
+  .zone-item {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 6px 0; border-bottom: 1px solid rgba(35,45,66,0.6); font-size: 11.5px;
+  }
+  .zone-item:last-child { border-bottom: none; }
+  .zone-item .zone-name { font-weight: 600; }
+  .zone-item .zone-meta { color: var(--text-dim); font-size: 10.5px; white-space: nowrap; text-align: right; }
 
   .ai-loading {
     display: flex; flex-direction: column; align-items: center; gap: 10px;
@@ -715,6 +733,69 @@ function renderAIResults(data) {
   } else {
     sourceHtml = `<div class="ai-placeholder">${isHaz ? 'Source analysis requires GROQ_API_KEY' : 'No hazardous anomaly – source analysis not triggered'}</div>`;
   }
+
+  // ---- Geospatial land-use attribution (construction vs traffic proximity) ----
+  // This comes straight from source_attribution.py / land_use_zones.json and is
+  // available regardless of GROQ_API_KEY, so it's rendered independently of the
+  // LLM's identified_source text above.
+  const geo = data.geospatial_attribution;
+  if (geo && geo.district_summary) {
+    const { dominant_source, construction_score, traffic_score } = geo.district_summary;
+    const total = construction_score + traffic_score;
+    const consPct = total > 0 ? Math.round((construction_score / total) * 100) : 0;
+    const trafPct = total > 0 ? 100 - consPct : 0;
+
+    // Merge per-station nearby zones into one deduped, ranked list
+    const zoneMap = {};
+    Object.values(geo.per_station || {}).forEach(stationData => {
+      (stationData.nearby_sources || []).forEach(z => {
+        if (!zoneMap[z.zone_name] || z.contribution_score > zoneMap[z.zone_name].contribution_score) {
+          zoneMap[z.zone_name] = z;
+        }
+      });
+    });
+    const topZones = Object.values(zoneMap)
+      .sort((a, b) => b.contribution_score - a.contribution_score)
+      .slice(0, 5);
+
+    sourceHtml += `
+      <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <div style="font-size:11px; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.3px;">
+          Land-Use Proximity (geospatial)
+        </div>`;
+
+    if (total > 0) {
+      sourceHtml += `
+        <div class="zone-score-legend">
+          <span>🏗️ Construction ${construction_score}</span>
+          <span>🚗 Traffic ${traffic_score}</span>
+        </div>
+        <div class="zone-score-track">
+          <div class="zone-score-fill construction" style="width:${consPct}%;"></div>
+          <div class="zone-score-fill traffic" style="width:${trafPct}%;"></div>
+        </div>
+        <div style="font-size:11.5px; margin:2px 0 8px;">
+          Dominant likely source:
+          <span class="grievance-type ${dominant_source}" style="margin-left:4px;">${dominant_source}</span>
+        </div>`;
+    } else {
+      sourceHtml += `<div class="ai-placeholder" style="padding:8px 0;">No construction/traffic zones within 8km of monitored stations</div>`;
+    }
+
+    if (topZones.length > 0) {
+      sourceHtml += `<div class="zone-list">` + topZones.map(z => `
+        <div class="zone-item">
+          <div>
+            <span class="zone-name">${z.zone_name}</span>
+            <span class="grievance-type ${z.source_type}" style="margin-left:6px;">${z.source_type}</span>
+          </div>
+          <div class="zone-meta">${z.distance_km} km · ${z.intensity} · score ${z.contribution_score}</div>
+        </div>`).join('') + `</div>`;
+    }
+
+    sourceHtml += `</div>`;
+  }
+
   document.getElementById('aiSourceContent').innerHTML = sourceHtml;
 
   // ---- Enforcement Order ----
