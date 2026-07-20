@@ -1,0 +1,105 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Wazirpur Industrial Area", "source_type": "construction", "intensity": "high" },
+      "geometry": { "type": "Point", "coordinates": [77.1667, 28.6969] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Okhla Industrial Estate", "source_type": "construction", "intensity": "high" },
+      "geometry": { "type": "Point", "coordinates": [77.2725, 28.5355] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Mayapuri Industrial Area", "source_type": "construction", "intensity": "medium" },
+      "geometry": { "type": "Point", "coordinates": [77.1288, 28.6314] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Naraina Industrial Area", "source_type": "construction", "intensity": "medium" },
+      "geometry": { "type": "Point", "coordinates": [77.1450, 28.6414] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Bawana Industrial Area", "source_type": "construction", "intensity": "high" },
+      "geometry": { "type": "Point", "coordinates": [77.0339, 28.7994] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Dwarka Expressway Construction", "source_type": "construction", "intensity": "high" },
+      "geometry": { "type": "Point", "coordinates": [77.0266, 28.5921] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Delhi-Meerut Expressway Extension Works", "source_type": "construction", "intensity": "medium" },
+      "geometry": { "type": "Point", "coordinates": [77.2946, 28.6692] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Central Ridge Metro Corridor Construction", "source_type": "construction", "intensity": "medium" },
+      "geometry": { "type": "Point", "coordinates": [77.1910, 28.6280] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Rithala Metro Extension Works", "source_type": "construction", "intensity": "medium" },
+      "geometry": { "type": "Point", "coordinates": [77.1080, 28.7211] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Najafgarh Road Widening Project", "source_type": "construction", "intensity": "low" },
+      "geometry": { "type": "Point", "coordinates": [77.0403, 28.6094] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "ITO Traffic Corridor", "source_type": "traffic", "intensity": "high" },
+      "geometry": { "type": "Point", "coordinates": [77.2410, 28.6289] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Ring Road - AIIMS Junction", "source_type": "traffic", "intensity": "high" },
+      "geometry": { "type": "Point", "coordinates": [77.2085, 28.5672] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Anand Vihar ISBT & Traffic Hub", "source_type": "traffic", "intensity": "high" },
+      "geometry": { "type": "Point", "coordinates": [77.3152, 28.6469] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Dhaula Kuan Traffic Interchange", "source_type": "traffic", "intensity": "high" },
+      "geometry": { "type": "Point", "coordinates": [77.1626, 28.5920] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "NH-48 Gurugram-Delhi Border Corridor", "source_type": "traffic", "intensity": "high" },
+      "geometry": { "type": "Point", "coordinates": [77.0722, 28.4949] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Mukarba Chowk Traffic Junction", "source_type": "traffic", "intensity": "medium" },
+      "geometry": { "type": "Point", "coordinates": [77.1631, 28.7397] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Akshardham - NH-24 Corridor", "source_type": "traffic", "intensity": "high" },
+      "geometry": { "type": "Point", "coordinates": [77.2773, 28.6127] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Kalindi Kunj Traffic Corridor", "source_type": "traffic", "intensity": "medium" },
+      "geometry": { "type": "Point", "coordinates": [77.3016, 28.5504] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Punjabi Bagh Traffic Corridor", "source_type": "traffic", "intensity": "medium" },
+      "geometry": { "type": "Point", "coordinates": [77.1310, 28.6692] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_name": "Badarpur Border Traffic Corridor", "source_type": "traffic", "intensity": "medium" },
+      "geometry": { "type": "Point", "coordinates": [77.3021, 28.4930] }
+    }
+  ]
+}

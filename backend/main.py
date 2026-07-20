@@ -4,6 +4,7 @@ AeroGuard – Unified FastAPI Backend
 Combines:
   • FastAPI backend (data ingestion, XGBoost forecasting, ward endpoints)
   • LangGraph Multi-Agent AI Engine (anomaly detection → source attribution → enforcement)
+  • Geospatial source attribution (construction + traffic proximity scoring)
 
 Stage 2 + Stage 3 of the AeroGuard architecture.
 """
@@ -23,6 +24,8 @@ import os
 from pathlib import Path
 from shapely.geometry import shape, Point
 from dotenv import load_dotenv
+
+from source_attribution import get_source_attribution
 
 # Load environment variables
 load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
@@ -550,10 +553,11 @@ def debug():
 #  Frontend clicks a district → GET /analyze-city?district=East
 #  Backend:
 #    1. Gathers sensor data for that district
-#    2. Fetches weather (wind direction/speed)
-#    3. Checks AQI threshold
-#    4. If hazardous → invokes LangGraph pipeline
-#    5. Returns unified JSON (forecast + AI analysis + dispatch order)
+#    2. Computes geospatial source attribution (construction + traffic proximity)
+#    3. Fetches weather (wind direction/speed)
+#    4. Checks AQI threshold
+#    5. If hazardous → invokes LangGraph pipeline
+#    6. Returns unified JSON (forecast + attribution + AI analysis + dispatch order)
 # ===================================================================
 
 @app.get("/analyze-city")
@@ -567,6 +571,7 @@ def analyze_city(district: str = "Delhi", city: str = None):
 
     Returns:
       - sensor_data: Live station readings + forecasts
+      - geospatial_attribution: Construction/traffic proximity-based source scoring per station
       - weather: Current weather conditions
       - ai_analysis: LangGraph multi-agent results (anomaly, source, enforcement)
       - public_advisory: Citizen-facing advisory message
@@ -598,8 +603,14 @@ def analyze_city(district: str = "Delhi", city: str = None):
     # Build sensor data array for the AI pipeline
     sensor_data_for_ai = []
     station_forecasts = []
+    station_source_attribution = {}
 
-    for loc in district_stations[:5]:  # Limit to avoid rate limiting
+    for loc in district_stations[:5]:
+        # ---- Geospatial source attribution (construction + traffic proximity) ----
+        station_source_attribution[loc["location_name"]] = get_source_attribution(
+            loc["lat"], loc["lon"]
+        )
+
         time.sleep(0.3)
         url = f"https://api.openaq.org/v3/locations/{loc['location_id']}/latest"
         try:
@@ -665,7 +676,8 @@ def analyze_city(district: str = "Delhi", city: str = None):
         return {
             "error": "Could not fetch any live sensor data for this district",
             "target": target,
-            "weather": weather_now
+            "weather": weather_now,
+            "geospatial_attribution": station_source_attribution,
         }
 
     # ---- Step 2: Determine if hazardous ----
@@ -685,7 +697,29 @@ def analyze_city(district: str = "Delhi", city: str = None):
     wind_direction = degrees_to_compass(weather_now["winddirection_mean"])
     wind_speed = round(weather_now["windspeed_mean"], 1)
 
-    # ---- Step 5: Invoke LangGraph pipeline ----
+    # ---- Step 5: Aggregate district-level source attribution summary ----
+    # Rolls up per-station construction/traffic scores into one district-level
+    # picture that's easy for the LLM (and frontend) to consume.
+    total_construction_score = sum(
+        v["summary"]["construction_score"] for v in station_source_attribution.values()
+    )
+    total_traffic_score = sum(
+        v["summary"]["traffic_score"] for v in station_source_attribution.values()
+    )
+    if total_construction_score == 0 and total_traffic_score == 0:
+        district_dominant_source = "unknown"
+    else:
+        district_dominant_source = (
+            "construction" if total_construction_score > total_traffic_score else "traffic"
+        )
+
+    district_attribution_summary = {
+        "dominant_source": district_dominant_source,
+        "construction_score": round(total_construction_score, 2),
+        "traffic_score": round(total_traffic_score, 2),
+    }
+
+    # ---- Step 6: Invoke LangGraph pipeline ----
     ai_analysis = None
     if is_hazardous and os.environ.get("GROQ_API_KEY"):
         try:
@@ -694,6 +728,7 @@ def analyze_city(district: str = "Delhi", city: str = None):
                 "sensor_data": sensor_data_for_ai,
                 "wind_direction": wind_direction,
                 "wind_speed_kmh": wind_speed,
+                "candidate_sources": station_source_attribution,
                 "regional_grievances": district_grievances,
                 "is_hazardous": False,  # Let the anomaly detector decide
                 "anomaly_summary": "",
@@ -716,8 +751,27 @@ def analyze_city(district: str = "Delhi", city: str = None):
                 "anomaly_summary": f"Max AQI of {max_aqi} detected – exceeds safe threshold",
             }
     else:
-        # No GROQ key or not hazardous – provide rule-based analysis
+        # No GROQ key or not hazardous – provide rule-based analysis,
+        # now informed by geospatial construction/traffic scores.
         avg_pm25 = np.mean([s["PM2_5"] for s in sensor_data_for_ai])
+
+        if is_hazardous:
+            if district_dominant_source != "unknown":
+                identified_source = (
+                    f"Rule-based (geospatial): {district_dominant_source} activity is the "
+                    f"dominant nearby contributor (construction score "
+                    f"{district_attribution_summary['construction_score']}, traffic score "
+                    f"{district_attribution_summary['traffic_score']}). "
+                    f"Full AI reasoning requires GROQ_API_KEY."
+                )
+            else:
+                identified_source = (
+                    "Rule-based: no nearby construction/traffic zones matched – multiple "
+                    "diffuse sources likely (AI analysis requires GROQ_API_KEY)"
+                )
+        else:
+            identified_source = "N/A"
+
         ai_analysis = {
             "is_hazardous": is_hazardous,
             "anomaly_summary": (
@@ -725,16 +779,24 @@ def analyze_city(district: str = "Delhi", city: str = None):
                 + ("HAZARDOUS – immediate action required." if is_hazardous
                    else "Within safe limits – monitoring continues.")
             ),
-            "identified_source": "N/A" if not is_hazardous else "Rule-based: multiple sources likely (AI analysis requires GROQ_API_KEY)",
+            "identified_source": identified_source,
             "enforcement_order": {} if not is_hazardous else {
-                "Action_Type": "Multi-department coordination required",
-                "Assigned_Department": "Environmental Office",
+                "Action_Type": (
+                    "Halt construction activity" if district_dominant_source == "construction"
+                    else "Restrict/reroute vehicular traffic" if district_dominant_source == "traffic"
+                    else "Multi-department coordination required"
+                ),
+                "Assigned_Department": (
+                    "Municipal Construction & Building Dept" if district_dominant_source == "construction"
+                    else "Traffic Police / Transport Dept" if district_dominant_source == "traffic"
+                    else "Environmental Office"
+                ),
                 "Priority_Level": "Critical" if max_aqi > 300 else "High",
-                "Justification": f"AQI {max_aqi} exceeds safe threshold in {target}, Delhi"
+                "Justification": f"AQI {max_aqi} exceeds safe threshold in {target}, Delhi",
             },
         }
 
-    # ---- Step 6: Build public advisory ----
+    # ---- Step 7: Build public advisory ----
     avg_pm25 = np.mean([s["PM2_5"] for s in sensor_data_for_ai])
     forecast_1d = station_forecasts[0]["forecast"]["1_day"] if station_forecasts else avg_pm25
     actions = recommended_actions(avg_pm25, forecast_1d)
@@ -751,6 +813,10 @@ def analyze_city(district: str = "Delhi", city: str = None):
         "timestamp": datetime.now().isoformat(),
         "sensor_data": sensor_data_for_ai,
         "station_forecasts": station_forecasts,
+        "geospatial_attribution": {
+            "per_station": station_source_attribution,
+            "district_summary": district_attribution_summary,
+        },
         "weather": {
             "temperature": weather_now["temp_mean"],
             "humidity": weather_now["humidity_mean"],

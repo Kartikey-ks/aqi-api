@@ -12,6 +12,7 @@ class CityState(TypedDict):
     sensor_data: list[dict]           # Regional AQI data from sensors
     wind_direction: str
     wind_speed_kmh: float
+    candidate_sources: dict           # Geospatial construction/traffic proximity scores per station
     regional_grievances: list[dict]   # Citizen complaints
     is_hazardous: bool
     anomaly_summary: str
@@ -70,33 +71,48 @@ def source_attributor_node(state: CityState) -> dict:
             "anomaly_summary",
             "wind_direction",
             "wind_speed_kmh",
+            "candidate_sources",
             "regional_grievances",
         ],
         template=(
             "You are an atmospheric-dispersion analyst for urban air quality.\n\n"
-            "## Atmospheric Dispersion Reasoning\n"
-            "Pollutants travel DOWNWIND from their source. Therefore, when a "
-            "pollution spike is detected at a monitoring station, the true source "
-            "lies UPWIND — i.e., in the opposite direction of the prevailing wind. "
+            "## Geospatial Evidence (primary signal)\n"
+            "For each monitoring station, we have already computed nearby "
+            "construction sites and traffic corridors, each with a "
+            "contribution_score (0 to 1; higher = closer and more intense, i.e. "
+            "more likely to be affecting that station right now), plus a "
+            "per-station summary naming the dominant_source "
+            "(construction | traffic | unknown) and its construction_score / "
+            "traffic_score. Use this as your primary evidence for source "
+            "attribution.\n\n"
+            "Candidate sources by station:\n{candidate_sources}\n\n"
+            "## Wind Context (secondary, corroborating signal)\n"
+            "The wind is blowing FROM {wind_direction} at {wind_speed_kmh} km/h. "
             "Higher wind speeds carry pollutants farther from their origin, while "
-            "lower speeds indicate a nearby source.\n\n"
+            "lower speeds indicate a nearby source. Use this only to corroborate "
+            "or nuance the geospatial evidence above (e.g. note if a high-scoring "
+            "nearby source is upwind or downwind) — do not let it override strong "
+            "geospatial evidence.\n\n"
             "Follow these steps:\n"
-            "1. DETERMINE THE UPSTREAM DIRECTION: The wind is blowing FROM "
-            "{wind_direction} at {wind_speed_kmh} km/h. Compute the opposite "
-            "compass direction — that is where the source must be located.\n"
+            "1. IDENTIFY THE GEOSPATIAL VERDICT: For the station(s) driving the "
+            "anomaly, read off the dominant_source and its construction_score / "
+            "traffic_score from the candidate sources above.\n"
             "2. SCAN REGIONAL GRIEVANCES: Review the citizen complaints below and "
             "identify any events, industrial activity, construction, or burning "
-            "reported in or near the upstream direction.\n"
-            "3. DEDUCE THE SOURCE: Correlate the anomaly details with the upstream "
-            "grievances to name the most likely source of the pollution spike.\n\n"
+            "that corroborates the geospatial verdict.\n"
+            "3. CONSIDER WIND AS CONTEXT: Briefly note whether the wind direction "
+            "is consistent with the geospatial verdict.\n"
+            "4. DEDUCE THE SOURCE: Combine the geospatial scores and grievances to "
+            "name the most likely source of the pollution spike.\n\n"
             "--- Data Inputs ---\n"
             "Anomaly summary: {anomaly_summary}\n\n"
-            "Wind: {wind_direction} at {wind_speed_kmh} km/h\n\n"
             "Regional grievances:\n{regional_grievances}\n\n"
             "--- Instructions ---\n"
             "Return ONLY a 2-sentence explanation:\n"
-            "  Sentence 1: State the upstream direction and the matching grievance.\n"
-            "  Sentence 2: Name the deduced pollution source and briefly justify it.\n"
+            "  Sentence 1: State the geospatial verdict (dominant source + scores) "
+            "and the matching grievance, if any.\n"
+            "  Sentence 2: Name the deduced pollution source and briefly justify it, "
+            "noting wind context if relevant.\n"
             "Do not include any other text."
         ),
     )
@@ -106,6 +122,7 @@ def source_attributor_node(state: CityState) -> dict:
         "anomaly_summary": state["anomaly_summary"],
         "wind_direction": state["wind_direction"],
         "wind_speed_kmh": state["wind_speed_kmh"],
+        "candidate_sources": json.dumps(state.get("candidate_sources", {}), indent=2),
         "regional_grievances": json.dumps(state["regional_grievances"], indent=2),
     })
 
@@ -221,6 +238,24 @@ if __name__ == "__main__":
         ],
         "wind_direction": "NW",
         "wind_speed_kmh": 12.5,
+        "candidate_sources": {
+            "Anand Vihar": {
+                "nearby_sources": [
+                    {
+                        "zone_name": "Anand Vihar ISBT & Traffic Hub",
+                        "source_type": "traffic",
+                        "distance_km": 0.3,
+                        "intensity": "high",
+                        "contribution_score": 0.96,
+                    }
+                ],
+                "summary": {
+                    "dominant_source": "traffic",
+                    "construction_score": 0,
+                    "traffic_score": 0.96,
+                },
+            }
+        },
         "regional_grievances": [
             {
                 "complaint_id": "GRV-1042",
