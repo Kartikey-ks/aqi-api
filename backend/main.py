@@ -808,32 +808,3 @@ def get_grievances(district: str = None):
 frontend_dir = BASE_DIR.parent / "frontend"
 if frontend_dir.exists():
     app.mount("/dashboard", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
-utdoor exertion. "
-            f"Tomorrow's forecast: {forecast_1d:.0f} µg/m³."
-        )
-    else:
-        return (
-            f"🟢 Air quality in {district}, Delhi is currently within acceptable limits "
-            f"(PM2.5: {current_pm25:.0f} µg/m³). No special precautions needed."
-        )
-
-
-# ===================================================================
-#  Grievances endpoint
-# ===================================================================
-
-@app.get("/grievances")
-def get_grievances(district: str = None):
-    """Return mock citizen grievances, optionally filtered by district."""
-    if district:
-        filtered = [g for g in MOCK_GRIEVANCES if g["district"].lower() == district.lower()]
-        return {"district": district, "grievances": filtered, "total": len(filtered)}
-    return {"grievances": MOCK_GRIEVANCES, "total": len(MOCK_GRIEVANCES)}
-
-
-# ===================================================================
-#  Serve frontend static files
-# ===================================================================
-frontend_dir = BASE_DIR.parent / "frontend"
-if frontend_dir.exists():
-    app.mount("/dashboard", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
