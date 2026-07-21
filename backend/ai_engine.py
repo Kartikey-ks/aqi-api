@@ -120,6 +120,8 @@ def anomaly_detector_node(state: CityState) -> dict:
             return {"readings": [], "error": "fetch_openaq_live tool not found"}
 
         result = await fetch_tool.ainvoke({"city": city, "parameter": "pm25"})
+        if isinstance(result, list) and len(result) > 0 and isinstance(result[0], dict):
+            result = result[0].get("text", result)
         return json.loads(result) if isinstance(result, str) else result
 
     try:
@@ -201,6 +203,8 @@ def source_attributor_node(state: CityState) -> dict:
         for t in tools:
             if t.name == "get_wind_patterns":
                 result = await t.ainvoke({"latitude": 28.6139, "longitude": 77.2090})
+                if isinstance(result, list) and len(result) > 0 and isinstance(result[0], dict):
+                    result = result[0].get("text", result)
                 wind_data = json.loads(result) if isinstance(result, str) else result
                 break
 
