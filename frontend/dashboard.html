@@ -462,7 +462,9 @@ window.addEventListener("load", async () => {
 // ===================================================================
 //  Configuration
 // ===================================================================
-const API_BASE = "https://aqi-api-p4jz.onrender.com";
+const API_BASE = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.protocol === "file:") 
+  ? "http://localhost:8000" 
+  : "https://aqi-api-p4jz.onrender.com";
 const CATEGORY_COLORS = {
   "Good": "#4CAF50", "Moderate": "#FFC107", "Poor": "#FF9800",
   "Severe": "#E53935", "Hazardous": "#7B1FA2", "No data": "#4B5567"
@@ -975,6 +977,12 @@ async function loadDashboard() {
 
     document.getElementById('loadingBanner').remove();
     document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleTimeString('en-IN');
+
+    // Force Leaflet to recalculate the map container size
+    // This fixes the bug where the map only renders a small square in the top-left
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 250);
 
   } catch (err) {
     document.getElementById('loadingBanner').textContent = 'Failed to load dashboard — check console';
