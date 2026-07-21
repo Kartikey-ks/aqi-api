@@ -1,33 +1,152 @@
+"""
+AeroGuard – LangGraph Multi-Agent AI Engine (MCP Client)
+=========================================================
+Upgraded to act as an MCP Client.  Instead of receiving a massive
+pre-filled CityState, agents now use MCP tool-calling to fetch
+exactly the data they need in real time.
+
+Agent 1 (Anomaly Detector)  → calls `fetch_openaq_live` via MCP
+Agent 2 (Source Attributor) → calls `get_wind_patterns` via MCP,
+                              reads `municipal_grievances` resource
+Agent 3 (Enforcement Agent) → no MCP (acts on state from Agents 1 & 2)
+"""
+
 import json
 import os
+import sys
+import asyncio
 from typing import TypedDict
+from pathlib import Path
+
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
+from langchain_core.messages import HumanMessage
 
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+from langchain_mcp_adapters.tools import load_mcp_tools
+
+
+# ---------------------------------------------------------------------------
+# State schema — now slim: only trigger context + agent-populated fields
+# ---------------------------------------------------------------------------
 
 class CityState(TypedDict):
     """State schema for the Urban Air Quality multi-agent workflow."""
-    target_location: str
-    sensor_data: list[dict]           # Regional AQI data from sensors
-    wind_direction: str
-    wind_speed_kmh: float
-    candidate_sources: dict           # Geospatial construction/traffic proximity scores per station
-    regional_grievances: list[dict]   # Citizen complaints
-    is_hazardous: bool
-    anomaly_summary: str
-    identified_source: str
-    enforcement_order: dict
+    # --- Trigger context (provided by FastAPI) ---
+    target_location: str            # e.g., "East, Delhi"
+    alert_context: str              # e.g., "AQI Spike Detected – PM2.5 at 347"
+    timestamp: str                  # ISO timestamp of the trigger
+    # --- Populated by agents via MCP tool calls ---
+    sensor_data: list[dict]         # Filled by Agent 1
+    wind_direction: str             # Filled by Agent 2
+    wind_speed_kmh: float           # Filled by Agent 2
+    regional_grievances: list[dict] # Filled by Agent 2
+    is_hazardous: bool              # Set by Agent 1
+    anomaly_summary: str            # Set by Agent 1
+    identified_source: str          # Set by Agent 2
+    enforcement_order: dict         # Set by Agent 3
 
+
+# ---------------------------------------------------------------------------
+# MCP connection helper
+# ---------------------------------------------------------------------------
+MCP_SERVER_SCRIPT = str(Path(__file__).resolve().parent / "mcp_server.py")
+
+
+async def _run_with_mcp_tools(callback):
+    """Connect to the MCP server via stdio, load tools, and run callback."""
+    server_params = StdioServerParameters(
+        command=sys.executable,
+        args=[MCP_SERVER_SCRIPT],
+        env={
+            **os.environ,
+            "PYTHONUNBUFFERED": "1",
+        },
+    )
+
+    async with stdio_client(server_params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            tools = await load_mcp_tools(session)
+            return await callback(tools, session)
+
+
+def _run_mcp_sync(callback):
+    """Synchronous wrapper for async MCP operations."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        # We're inside an existing event loop (e.g., FastAPI)
+        # Use a new thread to run the async code
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            future = pool.submit(asyncio.run, _run_with_mcp_tools(callback))
+            return future.result()
+    else:
+        return asyncio.run(_run_with_mcp_tools(callback))
+
+
+# ---------------------------------------------------------------------------
+# Agent 1: Anomaly Detector (MCP-enabled)
+# ---------------------------------------------------------------------------
 
 def anomaly_detector_node(state: CityState) -> dict:
-    """Analyze sensor data for hazardous AQI/PM2.5 levels using an LLM."""
+    """Analyze live air quality by calling fetch_openaq_live via MCP,
+    then determine if conditions are hazardous."""
+
     llm = ChatGroq(
         model="llama-3.3-70b-versatile",
         temperature=0,
         api_key=os.environ.get("GROQ_API_KEY"),
     )
 
+    # ---- Step 1: Fetch live data via MCP ----
+    city = state["target_location"].split(",")[0].strip()
+
+    async def fetch_data(tools, session):
+        # Find the fetch_openaq_live tool
+        fetch_tool = None
+        for t in tools:
+            if t.name == "fetch_openaq_live":
+                fetch_tool = t
+                break
+
+        if fetch_tool is None:
+            return {"readings": [], "error": "fetch_openaq_live tool not found"}
+
+        result = await fetch_tool.ainvoke({"city": city, "parameter": "pm25"})
+        return json.loads(result) if isinstance(result, str) else result
+
+    try:
+        openaq_data = _run_mcp_sync(fetch_data)
+    except Exception as e:
+        openaq_data = {"readings": [], "error": str(e)}
+
+    readings = openaq_data.get("readings", [])
+
+    # Build sensor_data from MCP results
+    sensor_data = []
+    for r in readings:
+        sensor_data.append({
+            "station": r.get("station", "Unknown"),
+            "AQI": r.get("AQI_approx", 0),
+            "PM2_5": r.get("PM2_5", 0),
+            "PM10": r.get("PM10_approx", 0),
+        })
+
+    if not sensor_data:
+        return {
+            "sensor_data": [],
+            "is_hazardous": False,
+            "anomaly_summary": f"No live sensor data available for {city}. {openaq_data.get('error', '')}",
+        }
+
+    # ---- Step 2: LLM analysis of the fetched data ----
     prompt = PromptTemplate(
         input_variables=["sensor_data"],
         template=(
@@ -43,76 +162,116 @@ def anomaly_detector_node(state: CityState) -> dict:
     )
 
     chain = prompt | llm
-    response = chain.invoke({"sensor_data": json.dumps(state["sensor_data"], indent=2)})
+    response = chain.invoke({"sensor_data": json.dumps(sensor_data, indent=2)})
 
-    # Parse the LLM's JSON response
     try:
         result = json.loads(response.content)
     except json.JSONDecodeError:
-        # Fallback: treat as non-hazardous if parsing fails
         result = {"is_hazardous": False, "summary": "Unable to parse sensor analysis."}
 
     return {
+        "sensor_data": sensor_data,
         "is_hazardous": result.get("is_hazardous", False),
         "anomaly_summary": result.get("summary", ""),
     }
 
 
+# ---------------------------------------------------------------------------
+# Agent 2: Source Attributor (MCP-enabled)
+# ---------------------------------------------------------------------------
+
 def source_attributor_node(state: CityState) -> dict:
-    """Use atmospheric dispersion reasoning to identify the pollution source."""
+    """Use atmospheric dispersion reasoning. Calls get_wind_patterns via MCP
+    and reads municipal_grievances resource to correlate sources."""
+
     llm = ChatGroq(
         model="llama-3.3-70b-versatile",
         temperature=0,
         api_key=os.environ.get("GROQ_API_KEY"),
     )
 
+    # ---- Step 1: Fetch wind patterns + grievances via MCP ----
+    district = state["target_location"].split(",")[0].strip()
+
+    async def fetch_context(tools, session):
+        wind_data = {}
+        grievances = []
+
+        # Call get_wind_patterns tool
+        for t in tools:
+            if t.name == "get_wind_patterns":
+                result = await t.ainvoke({"latitude": 28.6139, "longitude": 77.2090})
+                wind_data = json.loads(result) if isinstance(result, str) else result
+                break
+
+        # Read grievances resource
+        try:
+            resource_uri = f"municipal_grievances://{district}"
+            resource_content = await session.read_resource(resource_uri)
+            # resource_content is a ReadResourceResult with contents list
+            for content in resource_content.contents:
+                text = content.text if hasattr(content, "text") else str(content)
+                grievance_data = json.loads(text)
+                grievances = grievance_data.get("grievances", [])
+        except Exception:
+            # Fallback: try "all"
+            try:
+                resource_content = await session.read_resource("municipal_grievances://all")
+                for content in resource_content.contents:
+                    text = content.text if hasattr(content, "text") else str(content)
+                    grievance_data = json.loads(text)
+                    grievances = grievance_data.get("grievances", [])[:5]
+            except Exception:
+                grievances = []
+
+        return wind_data, grievances
+
+    try:
+        wind_data, grievances = _run_mcp_sync(fetch_context)
+    except Exception as e:
+        wind_data = {
+            "wind_speed_kmh": 0,
+            "wind_direction_compass": "N/A",
+            "error": str(e),
+        }
+        grievances = []
+
+    wind_direction = wind_data.get("wind_direction_compass", "N/A")
+    wind_speed = wind_data.get("wind_speed_kmh", 0)
+
+    # ---- Step 2: LLM source attribution ----
     prompt = PromptTemplate(
         input_variables=[
             "anomaly_summary",
             "wind_direction",
             "wind_speed_kmh",
-            "candidate_sources",
             "regional_grievances",
         ],
         template=(
             "You are an atmospheric-dispersion analyst for urban air quality.\n\n"
-            "## Geospatial Evidence (primary signal)\n"
-            "For each monitoring station, we have already computed nearby "
-            "construction sites and traffic corridors, each with a "
-            "contribution_score (0 to 1; higher = closer and more intense, i.e. "
-            "more likely to be affecting that station right now), plus a "
-            "per-station summary naming the dominant_source "
-            "(construction | traffic | unknown) and its construction_score / "
-            "traffic_score. Use this as your primary evidence for source "
-            "attribution.\n\n"
-            "Candidate sources by station:\n{candidate_sources}\n\n"
-            "## Wind Context (secondary, corroborating signal)\n"
-            "The wind is blowing FROM {wind_direction} at {wind_speed_kmh} km/h. "
+            "## Atmospheric Dispersion Reasoning\n"
+            "Pollutants travel DOWNWIND from their source. Therefore, when a "
+            "pollution spike is detected at a monitoring station, the true source "
+            "lies UPWIND — i.e., in the opposite direction of the prevailing wind. "
             "Higher wind speeds carry pollutants farther from their origin, while "
-            "lower speeds indicate a nearby source. Use this only to corroborate "
-            "or nuance the geospatial evidence above (e.g. note if a high-scoring "
-            "nearby source is upwind or downwind) — do not let it override strong "
-            "geospatial evidence.\n\n"
+            "lower speeds indicate a nearby source.\n\n"
             "Follow these steps:\n"
-            "1. IDENTIFY THE GEOSPATIAL VERDICT: For the station(s) driving the "
-            "anomaly, read off the dominant_source and its construction_score / "
-            "traffic_score from the candidate sources above.\n"
+            "1. DETERMINE THE UPSTREAM DIRECTION: The wind is blowing FROM "
+            "{wind_direction} at {wind_speed_kmh} km/h. Compute the opposite "
+            "compass direction — that is where the source must be located.\n"
             "2. SCAN REGIONAL GRIEVANCES: Review the citizen complaints below and "
             "identify any events, industrial activity, construction, or burning "
-            "that corroborates the geospatial verdict.\n"
-            "3. CONSIDER WIND AS CONTEXT: Briefly note whether the wind direction "
-            "is consistent with the geospatial verdict.\n"
-            "4. DEDUCE THE SOURCE: Combine the geospatial scores and grievances to "
-            "name the most likely source of the pollution spike.\n\n"
+            "reported in or near the upstream direction.\n"
+            "3. DEDUCE THE SOURCE: Correlate the anomaly details with the upstream "
+            "grievances to name the most likely source of the pollution spike.\n\n"
             "--- Data Inputs ---\n"
             "Anomaly summary: {anomaly_summary}\n\n"
+            "Wind: {wind_direction} at {wind_speed_kmh} km/h\n\n"
             "Regional grievances:\n{regional_grievances}\n\n"
             "--- Instructions ---\n"
             "Return ONLY a 2-sentence explanation:\n"
-            "  Sentence 1: State the geospatial verdict (dominant source + scores) "
-            "and the matching grievance, if any.\n"
-            "  Sentence 2: Name the deduced pollution source and briefly justify it, "
-            "noting wind context if relevant.\n"
+            "  Sentence 1: State the upstream direction and the matching grievance.\n"
+            "  Sentence 2: Name the deduced pollution source and briefly justify it.\n"
             "Do not include any other text."
         ),
     )
@@ -120,16 +279,22 @@ def source_attributor_node(state: CityState) -> dict:
     chain = prompt | llm
     response = chain.invoke({
         "anomaly_summary": state["anomaly_summary"],
-        "wind_direction": state["wind_direction"],
-        "wind_speed_kmh": state["wind_speed_kmh"],
-        "candidate_sources": json.dumps(state.get("candidate_sources", {}), indent=2),
-        "regional_grievances": json.dumps(state["regional_grievances"], indent=2),
+        "wind_direction": wind_direction,
+        "wind_speed_kmh": wind_speed,
+        "regional_grievances": json.dumps(grievances, indent=2),
     })
 
     return {
+        "wind_direction": wind_direction,
+        "wind_speed_kmh": wind_speed,
+        "regional_grievances": grievances,
         "identified_source": response.content.strip(),
     }
 
+
+# ---------------------------------------------------------------------------
+# Agent 3: Enforcement Agent (no MCP — uses state from Agents 1 & 2)
+# ---------------------------------------------------------------------------
 
 def enforcement_agent_node(state: CityState) -> dict:
     """Generate a municipal enforcement dispatch order based on the identified source."""
@@ -229,47 +394,18 @@ aeroguard_app = workflow.compile()
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
+
     mock_input: CityState = {
-        "target_location": "Anand Vihar, Delhi",
-        "sensor_data": [
-            {"station": "Anand Vihar", "AQI": 347, "PM2_5": 198.4, "PM10": 312.0},
-            {"station": "ITO", "AQI": 185, "PM2_5": 102.1, "PM10": 201.5},
-            {"station": "Dwarka Sec-8", "AQI": 120, "PM2_5": 55.3, "PM10": 98.7},
-        ],
-        "wind_direction": "NW",
-        "wind_speed_kmh": 12.5,
-        "candidate_sources": {
-            "Anand Vihar": {
-                "nearby_sources": [
-                    {
-                        "zone_name": "Anand Vihar ISBT & Traffic Hub",
-                        "source_type": "traffic",
-                        "distance_km": 0.3,
-                        "intensity": "high",
-                        "contribution_score": 0.96,
-                    }
-                ],
-                "summary": {
-                    "dominant_source": "traffic",
-                    "construction_score": 0,
-                    "traffic_score": 0.96,
-                },
-            }
-        },
-        "regional_grievances": [
-            {
-                "complaint_id": "GRV-1042",
-                "location": "Ghazipur Landfill (SE of Anand Vihar)",
-                "type": "Waste Burning",
-                "description": "Thick smoke observed from open waste burning at Ghazipur landfill.",
-            },
-            {
-                "complaint_id": "GRV-1055",
-                "location": "NH-24 Flyover Construction (East)",
-                "type": "Construction Dust",
-                "description": "Heavy dust clouds from ongoing flyover construction on NH-24.",
-            },
-        ],
+        "target_location": "East, Delhi",
+        "alert_context": "AQI Spike Detected – PM2.5 readings above 200",
+        "timestamp": "2025-01-15T08:30:00",
+        # --- These will be populated by agents via MCP ---
+        "sensor_data": [],
+        "wind_direction": "",
+        "wind_speed_kmh": 0.0,
+        "regional_grievances": [],
         "is_hazardous": False,
         "anomaly_summary": "",
         "identified_source": "",
@@ -277,13 +413,16 @@ if __name__ == "__main__":
     }
 
     print("=" * 60)
-    print("  AeroGuard – Urban Air Quality Multi-Agent Workflow")
+    print("  AeroGuard – MCP-Enabled Multi-Agent Workflow")
     print("=" * 60)
 
     result = aeroguard_app.invoke(mock_input)
 
-    print(f"\n📍 Location        : {result['target_location']}")
-    print(f"⚠️  Hazardous       : {result['is_hazardous']}")
-    print(f"📋 Anomaly Summary : {result['anomaly_summary']}")
+    print(f"\n📍 Location         : {result['target_location']}")
+    print(f"⚠️  Hazardous        : {result['is_hazardous']}")
+    print(f"📋 Anomaly Summary  : {result['anomaly_summary']}")
+    print(f"📡 Sensor Stations  : {len(result.get('sensor_data', []))}")
+    print(f"🌬️  Wind             : {result.get('wind_direction', 'N/A')} at {result.get('wind_speed_kmh', 0)} km/h")
+    print(f"📢 Grievances Used  : {len(result.get('regional_grievances', []))}")
     print(f"🔍 Identified Source: {result.get('identified_source', 'N/A')}")
     print(f"🚨 Enforcement Order: {json.dumps(result.get('enforcement_order', {}), indent=2)}")

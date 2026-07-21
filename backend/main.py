@@ -547,17 +547,18 @@ def debug():
 
 
 # ===================================================================
-#  NEW ENDPOINT – /analyze-city  (Stage 2 → Stage 3 integration)
+#  NEW ENDPOINT – /analyze-city  (MCP-Integrated Architecture)
 # ===================================================================
 #  This is the KEY endpoint from the architecture diagram.
 #  Frontend clicks a district → GET /analyze-city?district=East
-#  Backend:
-#    1. Gathers sensor data for that district
-#    2. Computes geospatial source attribution (construction + traffic proximity)
-#    3. Fetches weather (wind direction/speed)
-#    4. Checks AQI threshold
-#    5. If hazardous → invokes LangGraph pipeline
-#    6. Returns unified JSON (forecast + attribution + AI analysis + dispatch order)
+#
+#  With MCP integration, this endpoint is now a LEAN TRIGGER:
+#    1. Lightweight AQI check (from cached sensor data)
+#    2. XGBoost forecasting (stays in FastAPI)
+#    3. Geospatial source attribution (stays in FastAPI)
+#    4. If hazardous → triggers LangGraph with MINIMAL context
+#       (agents fetch their own data via MCP tools)
+#    5. Returns unified JSON
 # ===================================================================
 
 @app.get("/analyze-city")
@@ -567,19 +568,19 @@ def analyze_city(district: str = "Delhi", city: str = None):
 
     Query params:
       - district: District name (e.g. "East", "Central", "North West")
-      - city: Alias for district (for backward compatibility with architecture diagram)
+      - city: Alias for district (for backward compatibility)
 
     Returns:
       - sensor_data: Live station readings + forecasts
-      - geospatial_attribution: Construction/traffic proximity-based source scoring per station
+      - geospatial_attribution: Construction/traffic proximity scoring
       - weather: Current weather conditions
-      - ai_analysis: LangGraph multi-agent results (anomaly, source, enforcement)
+      - ai_analysis: LangGraph multi-agent results (via MCP)
       - public_advisory: Citizen-facing advisory message
     """
     # Allow 'city' param as alias
     target = city if city else district
 
-    # ---- Step 1: Get sensor data for the target district ----
+    # ---- Step 1: Get weather + sensor data for XGBoost forecasting ----
     try:
         weather_now = get_current_weather_cached()
     except Exception as e:
@@ -600,13 +601,14 @@ def analyze_city(district: str = "Delhi", city: str = None):
                 "available_districts": list({loc["district"] for loc in PM25_LOCATIONS if loc["district"]})
             }
 
-    # Build sensor data array for the AI pipeline
-    sensor_data_for_ai = []
+    # ---- Step 2: Fetch live PM2.5 for XGBoost + threshold check ----
+    # (This stays in FastAPI because XGBoost forecasting needs it directly)
+    sensor_data_for_response = []
     station_forecasts = []
     station_source_attribution = {}
 
     for loc in district_stations[:5]:
-        # ---- Geospatial source attribution (construction + traffic proximity) ----
+        # Geospatial source attribution (construction + traffic proximity)
         station_source_attribution[loc["location_name"]] = get_source_attribution(
             loc["lat"], loc["lon"]
         )
@@ -632,13 +634,13 @@ def analyze_city(district: str = "Delhi", city: str = None):
 
         sensor_entry = {
             "station": loc["location_name"],
-            "AQI": round(current_pm25 * 1.5),  # Approximate AQI from PM2.5
+            "AQI": round(current_pm25 * 1.5),
             "PM2_5": round(current_pm25, 1),
-            "PM10": round(current_pm25 * 1.6, 1),  # Approximate PM10
+            "PM10": round(current_pm25 * 1.6, 1),
         }
-        sensor_data_for_ai.append(sensor_entry)
+        sensor_data_for_response.append(sensor_entry)
 
-        # Also build XGBoost forecast for this station
+        # XGBoost forecast (stays in FastAPI)
         loc_normalized = normalize_name(loc["location_name"])
         station_id = STATION_IDS.get(loc_normalized)
         if station_id is not None:
@@ -672,7 +674,7 @@ def analyze_city(district: str = "Delhi", city: str = None):
                     }
                 })
 
-    if not sensor_data_for_ai:
+    if not sensor_data_for_response:
         return {
             "error": "Could not fetch any live sensor data for this district",
             "target": target,
@@ -680,26 +682,11 @@ def analyze_city(district: str = "Delhi", city: str = None):
             "geospatial_attribution": station_source_attribution,
         }
 
-    # ---- Step 2: Determine if hazardous ----
-    max_aqi = max(s["AQI"] for s in sensor_data_for_ai)
+    # ---- Step 3: Lightweight threshold check (is AQI > safe?) ----
+    max_aqi = max(s["AQI"] for s in sensor_data_for_response)
     is_hazardous = max_aqi > 200
 
-    # ---- Step 3: Get relevant grievances for this district ----
-    district_grievances = [
-        g for g in MOCK_GRIEVANCES
-        if g["district"].lower() == target.lower()
-    ]
-    # If no district-specific grievances, use all as context
-    if not district_grievances:
-        district_grievances = MOCK_GRIEVANCES[:5]
-
-    # ---- Step 4: Compute wind direction from weather ----
-    wind_direction = degrees_to_compass(weather_now["winddirection_mean"])
-    wind_speed = round(weather_now["windspeed_mean"], 1)
-
-    # ---- Step 5: Aggregate district-level source attribution summary ----
-    # Rolls up per-station construction/traffic scores into one district-level
-    # picture that's easy for the LLM (and frontend) to consume.
+    # ---- Step 4: Geospatial source attribution (district-level rollup) ----
     total_construction_score = sum(
         v["summary"]["construction_score"] for v in station_source_attribution.values()
     )
@@ -719,18 +706,29 @@ def analyze_city(district: str = "Delhi", city: str = None):
         "traffic_score": round(total_traffic_score, 2),
     }
 
-    # ---- Step 6: Invoke LangGraph pipeline ----
+    # ---- Step 5: Compute wind direction from weather (for response) ----
+    wind_direction = degrees_to_compass(weather_now["winddirection_mean"])
+    wind_speed = round(weather_now["windspeed_mean"], 1)
+
+    # ---- Step 6: Trigger LangGraph MCP pipeline (if hazardous) ----
+    # KEY CHANGE: We now pass only minimal trigger context.
+    # The LangGraph agents will fetch their own data via MCP tools.
     ai_analysis = None
     if is_hazardous and os.environ.get("GROQ_API_KEY"):
         try:
             langgraph_input: CityState = {
                 "target_location": f"{target}, Delhi",
-                "sensor_data": sensor_data_for_ai,
-                "wind_direction": wind_direction,
-                "wind_speed_kmh": wind_speed,
-                "candidate_sources": station_source_attribution,
-                "regional_grievances": district_grievances,
-                "is_hazardous": False,  # Let the anomaly detector decide
+                "alert_context": (
+                    f"AQI Spike Detected – Max AQI {max_aqi} in {target}. "
+                    f"Geospatial dominant source: {district_dominant_source}."
+                ),
+                "timestamp": datetime.now().isoformat(),
+                # --- Empty: agents populate these via MCP ---
+                "sensor_data": [],
+                "wind_direction": "",
+                "wind_speed_kmh": 0.0,
+                "regional_grievances": [],
+                "is_hazardous": False,  # Let Agent 1 decide from live MCP data
                 "anomaly_summary": "",
                 "identified_source": "",
                 "enforcement_order": {},
@@ -743,6 +741,12 @@ def analyze_city(district: str = "Delhi", city: str = None):
                 "anomaly_summary": result["anomaly_summary"],
                 "identified_source": result.get("identified_source", "N/A"),
                 "enforcement_order": result.get("enforcement_order", {}),
+                "mcp_sensor_data": result.get("sensor_data", []),
+                "mcp_wind": {
+                    "direction": result.get("wind_direction", "N/A"),
+                    "speed_kmh": result.get("wind_speed_kmh", 0),
+                },
+                "mcp_grievances_used": len(result.get("regional_grievances", [])),
             }
         except Exception as e:
             ai_analysis = {
@@ -751,9 +755,8 @@ def analyze_city(district: str = "Delhi", city: str = None):
                 "anomaly_summary": f"Max AQI of {max_aqi} detected – exceeds safe threshold",
             }
     else:
-        # No GROQ key or not hazardous – provide rule-based analysis,
-        # now informed by geospatial construction/traffic scores.
-        avg_pm25 = np.mean([s["PM2_5"] for s in sensor_data_for_ai])
+        # No GROQ key or not hazardous – provide rule-based analysis
+        avg_pm25 = np.mean([s["PM2_5"] for s in sensor_data_for_response])
 
         if is_hazardous:
             if district_dominant_source != "unknown":
@@ -797,7 +800,7 @@ def analyze_city(district: str = "Delhi", city: str = None):
         }
 
     # ---- Step 7: Build public advisory ----
-    avg_pm25 = np.mean([s["PM2_5"] for s in sensor_data_for_ai])
+    avg_pm25 = np.mean([s["PM2_5"] for s in sensor_data_for_response])
     forecast_1d = station_forecasts[0]["forecast"]["1_day"] if station_forecasts else avg_pm25
     actions = recommended_actions(avg_pm25, forecast_1d)
 
@@ -811,7 +814,7 @@ def analyze_city(district: str = "Delhi", city: str = None):
     return {
         "target": target,
         "timestamp": datetime.now().isoformat(),
-        "sensor_data": sensor_data_for_ai,
+        "sensor_data": sensor_data_for_response,
         "station_forecasts": station_forecasts,
         "geospatial_attribution": {
             "per_station": station_source_attribution,
@@ -826,7 +829,10 @@ def analyze_city(district: str = "Delhi", city: str = None):
             "precipitation_sum": weather_now["precipitation_sum"],
         },
         "ai_analysis": ai_analysis,
-        "grievances_considered": district_grievances,
+        "grievances_considered": [
+            g for g in MOCK_GRIEVANCES
+            if g.get("district", "").lower() == target.lower()
+        ] or MOCK_GRIEVANCES[:5],
         "public_advisory": public_advisory,
     }
 

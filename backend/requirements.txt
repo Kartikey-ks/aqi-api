@@ -12,3 +12,5 @@ langchain-groq
 langchain-core
 langchain
 python-dotenv
+mcp>=1.0.0
+langchain-mcp-adapters>=0.1.0
