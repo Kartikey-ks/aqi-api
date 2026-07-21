@@ -1,959 +1,261 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>AeroGuard – Delhi Air Quality Command Center</title>
-<meta name="description" content="Real-time air quality monitoring, XGBoost forecasting, and AI-powered enforcement dispatch for Delhi districts." />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>AeroGuard | AI Air Quality Forecasting</title>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script
+async
+crossorigin="anonymous"
+data-clerk-publishable-key="pk_test_cHJlcGFyZWQtZW11LTU3LmNsZXJrLmFjY291bnRzLmRldiQ"
+src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js">
+</script>
+
 <style>
-  :root {
-    --bg: #0B1220;
-    --surface: #141C2E;
-    --surface-2: #1B2540;
-    --border: #232D42;
-    --text: #E8ECF4;
-    --text-dim: #8B95AC;
-    --accent: #3DD6C1;
-    --good: #4CAF50;
-    --moderate: #FFC107;
-    --poor: #FF9800;
-    --severe: #E53935;
-    --hazardous: #7B1FA2;
-    --nodata: #4B5567;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; }
-  .mono { font-family: 'JetBrains Mono', monospace; }
-  .display { font-family: 'Space Grotesk', sans-serif; }
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Inter,sans-serif;
+}
 
-  .app { display: grid; grid-template-rows: 60px 1fr; height: 100vh; }
+body{
+background:#0B1220;
+color:white;
+min-height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+overflow:hidden;
+}
 
-  /* ---------- Top bar ---------- */
-  .topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--surface);
-  }
-  .brand { display: flex; align-items: center; gap: 10px; }
-  .brand-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse-glow 2s ease-in-out infinite; }
-  @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 8px var(--accent); }
-    50% { box-shadow: 0 0 16px var(--accent), 0 0 24px rgba(61,214,193,0.3); }
-  }
-  .brand-title { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 16px; letter-spacing: 0.3px; }
-  .brand-sub { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
-  .topbar-right { display: flex; align-items: center; gap: 16px; }
-  .clock { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-dim); }
-  .status-pill {
-    display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px;
-    background: rgba(76,175,80,0.12); border: 1px solid rgba(76,175,80,0.4); font-size: 12px; font-weight: 500;
-  }
-  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+body::before{
+content:"";
+position:absolute;
+width:700px;
+height:700px;
+background:radial-gradient(circle,#3DD6C120,transparent 70%);
+top:-200px;
+right:-200px;
+}
 
-  /* ---------- Main layout ---------- */
-  .main { display: grid; grid-template-columns: 360px 1fr 380px; height: calc(100vh - 60px); }
-  .sidebar { overflow-y: auto; padding: 16px; background: var(--surface); border-right: 1px solid var(--border); }
-  .map-wrap { position: relative; }
-  #map { width: 100%; height: 100%; background: #0B1220; }
+body::after{
+content:"";
+position:absolute;
+width:500px;
+height:500px;
+background:radial-gradient(circle,#2565C720,transparent 70%);
+bottom:-150px;
+left:-150px;
+}
 
-  /* Right AI panel */
-  .ai-panel {
-    overflow-y: auto; padding: 16px; background: var(--surface);
-    border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px;
-  }
-  .ai-panel .card { margin-bottom: 0; }
+.container{
+position:relative;
+z-index:2;
+max-width:900px;
+text-align:center;
+padding:40px;
+}
 
-  .card {
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px; margin-bottom: 14px; transition: border-color 0.3s ease;
-  }
-  .card:hover { border-color: rgba(61,214,193,0.3); }
-  .card-title {
-    font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim);
-    margin-bottom: 10px; font-weight: 600; display: flex; align-items: center; gap: 6px;
-  }
-  .card-title .icon { font-size: 14px; }
+.badge{
+display:inline-block;
+padding:8px 18px;
+border:1px solid #3DD6C1;
+border-radius:50px;
+color:#3DD6C1;
+font-size:14px;
+margin-bottom:30px;
+}
 
-  /* ---------- Hero AQI gauge (signature element) ---------- */
-  .hero-row { display: flex; align-items: center; gap: 14px; }
-  .gauge-wrap { position: relative; width: 88px; height: 88px; flex-shrink: 0; }
-  .gauge-wrap svg { transform: rotate(-90deg); }
-  .gauge-track { fill: none; stroke: var(--border); stroke-width: 8; }
-  .gauge-fill { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray 0.6s ease, stroke 0.6s ease; }
-  .gauge-num {
-    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  }
-  .gauge-num .val { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 22px; }
-  .gauge-num .lbl { font-size: 9px; color: var(--text-dim); margin-top: -2px; }
-  .hero-meta .cat { font-size: 15px; font-weight: 600; font-family: 'Space Grotesk', sans-serif; }
-  .hero-meta .sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+h1{
+font-size:60px;
+font-weight:800;
+margin-bottom:20px;
+line-height:1.1;
+}
 
-  /* ---------- Trend sparkline ---------- */
-  .trend-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+.gradient{
+background:linear-gradient(90deg,#3DD6C1,#4FC3F7);
+-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;
+}
 
-  /* ---------- Weather stat row ---------- */
-  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; transition: transform 0.2s ease; }
-  .stat-box:hover { transform: translateY(-1px); }
-  .stat-box .lbl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; }
-  .stat-box .val { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 600; margin-top: 2px; }
+.subtitle{
+color:#B0BACD;
+font-size:20px;
+line-height:1.6;
+max-width:750px;
+margin:auto;
+margin-bottom:50px;
+}
 
-  /* ---------- Priority actions ---------- */
-  .action-item { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; line-height: 1.4; }
-  .action-item:last-child { border-bottom: none; }
-  .action-severity { width: 6px; border-radius: 3px; flex-shrink: 0; }
-  .action-item .district-tag { color: var(--accent); font-weight: 600; }
-  .empty-note { color: var(--text-dim); font-size: 12.5px; font-style: italic; }
+.buttons{
+display:flex;
+justify-content:center;
+gap:20px;
+flex-wrap:wrap;
+}
 
-  /* ---------- Intervention controls ---------- */
-  .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-  .btn {
-    border: none; border-radius: 8px; padding: 10px 8px; font-size: 12px; font-weight: 600;
-    cursor: pointer; color: white; font-family: 'Inter', sans-serif; text-align: center;
-    transition: filter 0.15s ease, transform 0.1s ease;
-  }
-  .btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
-  .btn:active { transform: translateY(0); }
-  .btn-stop { background: #C0392B; }
-  .btn-school { background: #D4A017; color: #1a1400; }
-  .btn-oddeven { background: #2E7D32; }
-  .btn-advisory { background: #2565C7; }
-  select {
-    width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border);
-    background: var(--surface); color: var(--text); font-size: 12.5px; font-family: 'Inter', sans-serif;
-  }
-  .intervention-log { margin-top: 6px; }
-  .intervention-row {
-    display: flex; justify-content: space-between; align-items: center; font-size: 12px;
-    padding: 7px 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; margin-bottom: 6px;
-  }
-  .intervention-row .revoke { color: var(--text-dim); cursor: pointer; font-size: 11px; }
-  .intervention-row .revoke:hover { color: var(--severe); }
+button{
+padding:16px 34px;
+border:none;
+border-radius:10px;
+font-size:17px;
+font-weight:600;
+cursor:pointer;
+transition:.25s;
+}
 
-  /* ---------- Floating map overlays ---------- */
-  .float-panel {
-    position: absolute; background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px; z-index: 1000; box-shadow: 0 4px 18px rgba(0,0,0,0.45);
-  }
-  .legend-panel { bottom: 18px; right: 18px; font-size: 12px; min-width: 150px; }
-  .legend-row { display: flex; align-items: center; gap: 7px; margin: 4px 0; }
-  .legend-swatch { width: 13px; height: 13px; border-radius: 3px; }
-  .last-updated { top: 14px; left: 14px; font-size: 11px; color: var(--text-dim); padding: 8px 12px; }
-  .ward-panel { top: 14px; right: 14px; width: 280px; display: none; }
-  .ward-panel .close-x { position: absolute; top: 10px; right: 12px; cursor: pointer; color: var(--text-dim); font-size: 14px; }
-  .ward-panel .w-title { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 15px; margin-bottom: 8px; }
-  .ward-panel .w-row { font-size: 12.5px; margin: 4px 0; color: var(--text-dim); }
-  .ward-panel .w-row b { color: var(--text); }
-  .ward-panel .w-actions { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-  .ward-panel .w-actions ul { margin: 6px 0 0; padding-left: 16px; }
-  .ward-panel .w-actions li { font-size: 11.5px; margin-bottom: 3px; }
-  .ward-panel .analyze-btn {
-    margin-top: 10px; width: 100%; padding: 8px; border: none; border-radius: 6px;
-    background: linear-gradient(135deg, #3DD6C1, #2565C7); color: white; font-weight: 600;
-    font-size: 12px; cursor: pointer; font-family: 'Inter', sans-serif;
-    transition: opacity 0.2s ease, transform 0.1s ease;
-  }
-  .ward-panel .analyze-btn:hover { opacity: 0.9; transform: translateY(-1px); }
-  .ward-panel .analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+#getStarted{
+background:#3DD6C1;
+color:#081018;
+}
 
-  .loading-banner {
-    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-    background: var(--surface); border: 1px solid var(--border); padding: 8px 16px; border-radius: 20px;
-    font-size: 12px; z-index: 1000;
-  }
+#getStarted:hover{
+transform:translateY(-2px);
+}
 
-  /* ---------- AI Analysis Panel styles ---------- */
-  .ai-section-title {
-    font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 14px;
-    margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
-  }
+#dashboardBtn{
+background:transparent;
+color:white;
+border:1px solid #3DD6C1;
+}
 
-  .ai-placeholder {
-    color: var(--text-dim); font-size: 12.5px; font-style: italic;
-    text-align: center; padding: 20px 10px; line-height: 1.5;
-  }
+#dashboardBtn:hover{
+background:#3DD6C115;
+}
 
-  .anomaly-badge {
-    display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px;
-    border-radius: 12px; font-size: 11px; font-weight: 600; margin-bottom: 8px;
-  }
-  .anomaly-badge.hazardous { background: rgba(229,57,53,0.15); color: #E53935; border: 1px solid rgba(229,57,53,0.4); }
-  .anomaly-badge.safe { background: rgba(76,175,80,0.15); color: #4CAF50; border: 1px solid rgba(76,175,80,0.4); }
+.features{
+margin-top:70px;
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:25px;
+}
 
-  .source-text { font-size: 12.5px; line-height: 1.5; color: var(--text); }
+.card{
+background:#141C2E;
+padding:25px;
+border-radius:12px;
+border:1px solid #232D42;
+}
 
-  .dispatch-order {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-    padding: 10px 12px; margin-top: 6px;
-  }
-  .dispatch-row {
-    display: flex; justify-content: space-between; align-items: center;
-    font-size: 12px; padding: 4px 0; border-bottom: 1px solid rgba(35,45,66,0.6);
-  }
-  .dispatch-row:last-child { border-bottom: none; }
-  .dispatch-row .label { color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
-  .dispatch-row .value { font-weight: 600; text-align: right; max-width: 60%; }
-  .priority-badge {
-    display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 10px;
-    font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-  }
-  .priority-badge.Critical { background: rgba(229,57,53,0.2); color: #E53935; }
-  .priority-badge.High { background: rgba(255,152,0,0.2); color: #FF9800; }
-  .priority-badge.Medium { background: rgba(255,193,7,0.2); color: #FFC107; }
-  .priority-badge.Low { background: rgba(76,175,80,0.2); color: #4CAF50; }
+.card h3{
+margin:15px 0;
+}
 
-  .advisory-box {
-    background: var(--surface); border-radius: 8px; padding: 10px 12px;
-    border-left: 3px solid var(--accent); font-size: 12.5px; line-height: 1.5;
-    margin-top: 6px;
-  }
+.card p{
+color:#9AA5BC;
+font-size:15px;
+line-height:1.6;
+}
 
-  .grievance-item {
-    padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px;
-  }
-  .grievance-item:last-child { border-bottom: none; }
-  .grievance-type {
-    display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px;
-    font-weight: 600; margin-right: 4px;
-  }
-  .grievance-type.waste { background: rgba(229,57,53,0.15); color: #E53935; }
-  .grievance-type.construction { background: rgba(255,152,0,0.15); color: #FF9800; }
-  .grievance-type.traffic { background: rgba(255,193,7,0.15); color: #FFC107; }
-  .grievance-type.industrial { background: rgba(123,31,162,0.15); color: #CE93D8; }
-  .grievance-type.unknown { background: rgba(255,255,255,0.08); color: var(--text-dim); }
+.icon{
+font-size:40px;
+}
 
-  .zone-score-legend { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-dim); margin-bottom: 4px; }
-  .zone-score-track {
-    display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 4px;
-    background: var(--surface); border: 1px solid var(--border);
-  }
-  .zone-score-fill.construction { background: #FF9800; }
-  .zone-score-fill.traffic { background: #FFC107; }
+@media(max-width:800px){
 
-  .zone-list { margin-top: 8px; }
-  .zone-item {
-    display: flex; justify-content: space-between; align-items: center; gap: 8px;
-    padding: 6px 0; border-bottom: 1px solid rgba(35,45,66,0.6); font-size: 11.5px;
-  }
-  .zone-item:last-child { border-bottom: none; }
-  .zone-item .zone-name { font-weight: 600; }
-  .zone-item .zone-meta { color: var(--text-dim); font-size: 10.5px; white-space: nowrap; text-align: right; }
+h1{
+font-size:42px;
+}
 
-  .ai-loading {
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
-    padding: 20px; color: var(--text-dim);
-  }
-  .ai-loading .spinner {
-    width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent);
-    border-radius: 50%; animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
+.features{
+grid-template-columns:1fr;
+}
 
-  /* ---------- Scrollbar styling ---------- */
-  .sidebar::-webkit-scrollbar, .ai-panel::-webkit-scrollbar { width: 5px; }
-  .sidebar::-webkit-scrollbar-track, .ai-panel::-webkit-scrollbar-track { background: transparent; }
-  .sidebar::-webkit-scrollbar-thumb, .ai-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.subtitle{
+font-size:17px;
+}
+
+}
 </style>
 </head>
+
 <body>
 
-<div class="app">
-  <div class="topbar">
-    <div class="brand">
-      <div class="brand-dot"></div>
-      <div>
-        <div class="brand-title">AEROGUARD – DELHI AIR QUALITY COMMAND CENTER</div>
-        <div class="brand-sub">Ward-level monitoring, forecasting & AI-powered enforcement</div>
-      </div>
-    </div>
-    <div class="topbar-right">
-      <div class="clock mono" id="clock">--:--:--</div>
-      <div class="status-pill"><div class="status-dot"></div>SYSTEM ACTIVE</div>
-    </div>
-  </div>
+<div class="container">
 
-  <div class="main">
-    <!-- ===== LEFT SIDEBAR ===== -->
-    <div class="sidebar">
-
-      <!-- Overall AQI hero -->
-      <div class="card">
-        <div class="card-title"><span class="icon">📊</span> Citywide AQI (current avg.)</div>
-        <div class="hero-row">
-          <div class="gauge-wrap">
-            <svg width="88" height="88" viewBox="0 0 88 88">
-              <circle class="gauge-track" cx="44" cy="44" r="38"></circle>
-              <circle id="gaugeFill" class="gauge-fill" cx="44" cy="44" r="38" stroke="#4CAF50"
-                stroke-dasharray="0 239"></circle>
-            </svg>
-            <div class="gauge-num">
-              <div class="val mono" id="overallVal">--</div>
-              <div class="lbl">AQI</div>
-            </div>
-          </div>
-          <div class="hero-meta">
-            <div class="cat" id="overallCat">Loading…</div>
-            <div class="sub" id="overallSub">Fetching live data</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Trend -->
-      <div class="card">
-        <div class="card-title"><span class="icon">📈</span> Forecast Trend (city avg.)</div>
-        <svg id="trendSvg" width="100%" height="60" viewBox="0 0 300 60" preserveAspectRatio="none"></svg>
-        <div class="trend-labels"><span>Now</span><span>+1 day</span><span>+2 day</span><span>+3 day</span></div>
-      </div>
-
-      <!-- Weather -->
-      <div class="card">
-        <div class="card-title"><span class="icon">🌤️</span> Current Conditions</div>
-        <div class="stat-grid">
-          <div class="stat-box"><div class="lbl">Temperature</div><div class="val mono" id="tempVal">--</div></div>
-          <div class="stat-box"><div class="lbl">Humidity</div><div class="val mono" id="humidVal">--</div></div>
-          <div class="stat-box"><div class="lbl">Wind Speed</div><div class="val mono" id="windVal">--</div></div>
-          <div class="stat-box"><div class="lbl">Wind Direction</div><div class="val mono" id="windDirVal" style="font-size:14px;">--</div></div>
-        </div>
-      </div>
-
-      <!-- Priority actions -->
-      <div class="card">
-        <div class="card-title"><span class="icon">🚨</span> Priority Actions</div>
-        <div id="priorityActions"><div class="empty-note">Loading recommendations…</div></div>
-      </div>
-
-      <!-- Intervention controls -->
-      <div class="card">
-        <div class="card-title"><span class="icon">⚡</span> Take Action</div>
-        <select id="wardSelect"><option value="">Select ward…</option></select>
-        <select id="durationSelect">
-          <option value="24h">24 hours</option>
-          <option value="48h">48 hours</option>
-          <option value="72h">72 hours</option>
-        </select>
-        <div class="btn-grid">
-          <button class="btn btn-stop" onclick="logIntervention('Construction halt')">Stop Construction</button>
-          <button class="btn btn-school" onclick="logIntervention('School closure advisory')">Close Schools</button>
-          <button class="btn btn-oddeven" onclick="logIntervention('Odd-even vehicle scheme')">Odd-Even System</button>
-          <button class="btn btn-advisory" onclick="logIntervention('Public health advisory')">Health Advisory</button>
-        </div>
-        <div class="intervention-log" id="interventionLog"></div>
-      </div>
-
-    </div>
-
-    <!-- ===== CENTER MAP ===== -->
-    <div class="map-wrap">
-      <div id="map"></div>
-      <div class="loading-banner" id="loadingBanner">Loading ward data…</div>
-      <div class="float-panel last-updated" id="lastUpdated">Last updated: --</div>
-
-      <div class="float-panel ward-panel" id="wardPanel">
-        <span class="close-x" onclick="closeWardPanel()">✕</span>
-        <div class="w-title" id="wp-title">—</div>
-        <div class="w-row" id="wp-current">Current AQI: —</div>
-        <div class="w-row" id="wp-f1">1-day forecast: —</div>
-        <div class="w-row" id="wp-f2">2-day forecast: —</div>
-        <div class="w-row" id="wp-f3">3-day forecast: —</div>
-        <div class="w-row" id="wp-sensors">— sensors</div>
-        <div class="w-actions">
-          <b style="font-size:12px;">Recommended actions</b>
-          <ul id="wp-actions"></ul>
-        </div>
-        <button class="analyze-btn" id="analyzeBtn" onclick="runAIAnalysis()">🤖 Run AI Analysis</button>
-      </div>
-
-      <div class="float-panel legend-panel">
-        <div style="font-weight:600; margin-bottom:6px; font-size:12px;">1-day Forecast AQI</div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#4CAF50"></div>Good (0-50)</div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#FFC107"></div>Moderate (51-100)</div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#FF9800"></div>Poor (101-200)</div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#E53935"></div>Severe (201-300)</div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#7B1FA2"></div>Hazardous (300+)</div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#4B5567"></div>No data</div>
-      </div>
-    </div>
-
-    <!-- ===== RIGHT AI PANEL ===== -->
-    <div class="ai-panel">
-      <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; margin-bottom:2px; display:flex; align-items:center; gap:8px;">
-        <span style="font-size:18px;">🧠</span> AI Analysis Engine
-      </div>
-      <div style="font-size:11px; color:var(--text-dim); margin-bottom:4px;">LangGraph Multi-Agent Pipeline</div>
-
-      <!-- Anomaly Detection -->
-      <div class="card" id="aiAnomalyCard">
-        <div class="card-title"><span class="icon">🔍</span> Agent 1: Anomaly Detector</div>
-        <div id="aiAnomalyContent">
-          <div class="ai-placeholder">Click a district on the map, then press<br/>"Run AI Analysis" to activate agents</div>
-        </div>
-      </div>
-
-      <!-- Source Attribution -->
-      <div class="card" id="aiSourceCard">
-        <div class="card-title"><span class="icon">🌬️</span> Agent 2: Source Attributor</div>
-        <div id="aiSourceContent">
-          <div class="ai-placeholder">Waiting for anomaly detection…</div>
-        </div>
-      </div>
-
-      <!-- Enforcement / Dispatch Order -->
-      <div class="card" id="aiEnforcementCard">
-        <div class="card-title"><span class="icon">📋</span> Agent 3: Dispatch Order</div>
-        <div id="aiEnforcementContent">
-          <div class="ai-placeholder">Waiting for source attribution…</div>
-        </div>
-      </div>
-
-      <!-- Public Advisory -->
-      <div class="card" id="aiAdvisoryCard">
-        <div class="card-title"><span class="icon">📢</span> Public Advisory</div>
-        <div id="aiAdvisoryContent">
-          <div class="ai-placeholder">Advisory will be generated after analysis</div>
-        </div>
-      </div>
-
-      <!-- Grievances -->
-      <div class="card" id="aiGrievancesCard">
-        <div class="card-title"><span class="icon">📝</span> Citizen Grievances</div>
-        <div id="aiGrievancesContent">
-          <div class="ai-placeholder">Select a district to view complaints</div>
-        </div>
-      </div>
-    </div>
-
-  </div>
+<div class="badge">
+🚀 AI Powered AQI Prediction Platform
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<h1>
+Predict Delhi's
+<span class="gradient">Air Quality</span>
+Before It Happens
+</h1>
+
+<p class="subtitle">
+AeroGuard combines Machine Learning, Weather Forecasting and AI-powered
+analysis to predict AQI levels, identify pollution hotspots and recommend
+actionable interventions for Delhi districts.
+</p>
+
+<div class="buttons">
+
+<button id="getStarted">
+Get Started
+</button>
+
+<button id="dashboardBtn">
+Dashboard
+</button>
+
+</div>
+
+<div class="features">
+
+<div class="card">
+<div class="icon">📊</div>
+<h3>ML Forecasting</h3>
+<p>
+Predict AQI for the next 3 days using trained machine learning models.
+</p>
+</div>
+
+<div class="card">
+<div class="icon">🗺️</div>
+<h3>Interactive Dashboard</h3>
+<p>
+View district-wise pollution levels, weather data and live visualizations.
+</p>
+</div>
+
+<div class="card">
+<div class="icon">🤖</div>
+<h3>AI Analysis</h3>
+<p>
+Identify pollution sources and receive intelligent recommendations for mitigation.
+</p>
+</div>
+
+</div>
+
+</div>
+
 <script>
-// ===================================================================
-//  Configuration
-// ===================================================================
-const API_BASE = "https://aqi-api-p4jz.onrender.com";
-const CATEGORY_COLORS = {
-  "Good": "#4CAF50", "Moderate": "#FFC107", "Poor": "#FF9800",
-  "Severe": "#E53935", "Hazardous": "#7B1FA2", "No data": "#4B5567"
-};
-const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 38;
+window.addEventListener("load", async () => {
+    await Clerk.load();
 
-function aqiCategory(value) {
-  if (value == null) return "No data";
-  if (value <= 50) return "Good";
-  if (value <= 100) return "Moderate";
-  if (value <= 200) return "Poor";
-  if (value <= 300) return "Severe";
-  return "Hazardous";
-}
-
-// ===================================================================
-//  Clock
-// ===================================================================
-function tickClock() {
-  const now = new Date();
-  document.getElementById('clock').textContent = now.toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
-  });
-}
-setInterval(tickClock, 1000);
-tickClock();
-
-// ===================================================================
-//  Map setup
-// ===================================================================
-const map = L.map('map', { zoomControl: false }).setView([28.6139, 77.2090], 10.5);
-L.control.zoom({ position: 'bottomleft' }).addTo(map);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
-}).addTo(map);
-
-let geoLayer = null;
-let wardLookup = {};
-let selectedDistrict = null;
-const activeInterventions = [];
-
-function closeWardPanel() {
-  document.getElementById('wardPanel').style.display = 'none';
-  selectedDistrict = null;
-}
-
-function showWardPanel(ward) {
-  document.getElementById('wardPanel').style.display = 'block';
-  document.getElementById('wp-title').textContent = ward.district + " Delhi";
-
-  const analyzeBtn = document.getElementById('analyzeBtn');
-  analyzeBtn.dataset.district = ward.district;
-  analyzeBtn.disabled = false;
-  analyzeBtn.textContent = '🤖 Run AI Analysis';
-
-  if (ward.station_count === 0) {
-    document.getElementById('wp-current').textContent = 'No sensor coverage in this district';
-    document.getElementById('wp-f1').textContent = '';
-    document.getElementById('wp-f2').textContent = '';
-    document.getElementById('wp-f3').textContent = '';
-    document.getElementById('wp-sensors').textContent = '';
-    document.getElementById('wp-actions').innerHTML = '<li>No data available</li>';
-    analyzeBtn.disabled = true;
-    analyzeBtn.textContent = '🤖 No data for analysis';
-    return;
-  }
-
-  document.getElementById('wp-current').innerHTML = `<b>Current:</b> ${ward.current_pm25} (${ward.current_category})`;
-  document.getElementById('wp-f1').innerHTML = `<b>+1 day:</b> ${ward.forecast["1_day"]} (${ward.forecast_1day_category})`;
-  document.getElementById('wp-f2').innerHTML = `<b>+2 day:</b> ${ward.forecast["2_day"]}`;
-  document.getElementById('wp-f3').innerHTML = `<b>+3 day:</b> ${ward.forecast["3_day"]}`;
-  document.getElementById('wp-sensors').textContent = `${ward.station_count} sensor(s) in this district`;
-  document.getElementById('wp-actions').innerHTML = ward.recommended_actions.map(a => `<li>${a}</li>`).join('');
-}
-
-function styleForDistrict(districtName) {
-  const ward = wardLookup[districtName];
-  const category = ward ? ward.forecast_1day_category : "No data";
-  const isSelected = districtName === selectedDistrict;
-  const hasIntervention = activeInterventions.some(iv => iv.ward === districtName);
-  return {
-    fillColor: CATEGORY_COLORS[category] || CATEGORY_COLORS["No data"],
-    fillOpacity: isSelected ? 0.85 : 0.6,
-    color: hasIntervention ? "#3DD6C1" : "#0B1220",
-    weight: hasIntervention ? 3 : 1.2,
-    dashArray: hasIntervention ? "5,4" : null
-  };
-}
-
-function refreshMapStyles() {
-  if (geoLayer) {
-    geoLayer.eachLayer(layer => {
-      layer.setStyle(styleForDistrict(layer.feature.properties.dtname));
-    });
-  }
-}
-
-// ===================================================================
-//  Trend sparkline
-// ===================================================================
-function drawTrend(values) {
-  const svg = document.getElementById('trendSvg');
-  svg.innerHTML = '';
-  const valid = values.filter(v => v != null);
-  if (valid.length === 0) return;
-
-  const maxVal = Math.max(...valid, 50) * 1.15;
-  const w = 300, h = 60, pad = 6;
-  const stepX = (w - pad * 2) / (values.length - 1);
-
-  const points = values.map((v, i) => {
-    const x = pad + i * stepX;
-    const y = v == null ? null : h - pad - ((v / maxVal) * (h - pad * 2));
-    return { x, y, v };
-  });
-
-  // Gradient area fill
-  const areaPoints = points.filter(p => p.y != null);
-  if (areaPoints.length > 1) {
-    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-    const grad = document.createElementNS("http://www.w3.org/2000/svg", "linearGradient");
-    grad.setAttribute("id", "trendGrad");
-    grad.setAttribute("x1", "0"); grad.setAttribute("y1", "0");
-    grad.setAttribute("x2", "0"); grad.setAttribute("y2", "1");
-    const stop1 = document.createElementNS("http://www.w3.org/2000/svg", "stop");
-    stop1.setAttribute("offset", "0%"); stop1.setAttribute("stop-color", "#3DD6C1"); stop1.setAttribute("stop-opacity", "0.3");
-    const stop2 = document.createElementNS("http://www.w3.org/2000/svg", "stop");
-    stop2.setAttribute("offset", "100%"); stop2.setAttribute("stop-color", "#3DD6C1"); stop2.setAttribute("stop-opacity", "0");
-    grad.appendChild(stop1); grad.appendChild(stop2); defs.appendChild(grad); svg.appendChild(defs);
-
-    const areaPath = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-    const areaStr = `${areaPoints[0].x},${h} ` + areaPoints.map(p => `${p.x},${p.y}`).join(' ') + ` ${areaPoints[areaPoints.length-1].x},${h}`;
-    areaPath.setAttribute("points", areaStr);
-    areaPath.setAttribute("fill", "url(#trendGrad)");
-    svg.appendChild(areaPath);
-  }
-
-  const linePoints = points.filter(p => p.y != null).map(p => `${p.x},${p.y}`).join(' ');
-  const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-  line.setAttribute("points", linePoints);
-  line.setAttribute("fill", "none");
-  line.setAttribute("stroke", "#3DD6C1");
-  line.setAttribute("stroke-width", "2.5");
-  svg.appendChild(line);
-
-  points.forEach(p => {
-    if (p.y == null) return;
-    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    circle.setAttribute("cx", p.x);
-    circle.setAttribute("cy", p.y);
-    circle.setAttribute("r", 3.5);
-    circle.setAttribute("fill", "#0B1220");
-    circle.setAttribute("stroke", "#3DD6C1");
-    circle.setAttribute("stroke-width", "2");
-    svg.appendChild(circle);
-  });
-}
-
-// ===================================================================
-//  Priority actions
-// ===================================================================
-function renderPriorityActions(wards) {
-  const covered = wards.filter(w => w.station_count > 0);
-  const ranked = covered
-    .filter(w => w.recommended_actions[0] !== "No immediate action required")
-    .sort((a, b) => Math.max(b.current_pm25, b.forecast["1_day"]) - Math.max(a.current_pm25, a.forecast["1_day"]))
-    .slice(0, 3);
-
-  const container = document.getElementById('priorityActions');
-  if (ranked.length === 0) {
-    container.innerHTML = '<div class="empty-note">No priority interventions needed at this time.</div>';
-    return;
-  }
-
-  let html = '';
-  ranked.forEach(w => {
-    const color = CATEGORY_COLORS[w.forecast_1day_category] || CATEGORY_COLORS["No data"];
-    w.recommended_actions.forEach(action => {
-      html += `
-        <div class="action-item">
-          <div class="action-severity" style="background:${color}"></div>
-          <div><span class="district-tag">${w.district}:</span> ${action}</div>
-        </div>`;
-    });
-  });
-  container.innerHTML = html;
-}
-
-// ===================================================================
-//  Intervention log
-// ===================================================================
-function logIntervention(actionName) {
-  const ward = document.getElementById('wardSelect').value;
-  const duration = document.getElementById('durationSelect').value;
-  if (!ward) {
-    alert("Select a ward first.");
-    return;
-  }
-  activeInterventions.push({ action: actionName, ward, duration, ts: new Date() });
-  renderInterventionLog();
-  refreshMapStyles();
-}
-
-function revokeIntervention(index) {
-  activeInterventions.splice(index, 1);
-  renderInterventionLog();
-  refreshMapStyles();
-}
-
-function renderInterventionLog() {
-  const el = document.getElementById('interventionLog');
-  if (activeInterventions.length === 0) {
-    el.innerHTML = '';
-    return;
-  }
-  el.innerHTML = activeInterventions.map((iv, i) => `
-    <div class="intervention-row">
-      <div><b>${iv.ward}</b> — ${iv.action} (${iv.duration})</div>
-      <div class="revoke" onclick="revokeIntervention(${i})">Revoke</div>
-    </div>
-  `).join('');
-}
-
-// ===================================================================
-//  AI Analysis (calls /analyze-city endpoint)
-// ===================================================================
-async function runAIAnalysis() {
-  const btn = document.getElementById('analyzeBtn');
-  const district = btn.dataset.district;
-  if (!district) return;
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Analyzing…';
-
-  // Show loading state in AI panel
-  const loadingHtml = '<div class="ai-loading"><div class="spinner"></div><div style="font-size:12px;">Running analysis…</div></div>';
-  document.getElementById('aiAnomalyContent').innerHTML = loadingHtml;
-  document.getElementById('aiSourceContent').innerHTML = loadingHtml;
-  document.getElementById('aiEnforcementContent').innerHTML = loadingHtml;
-  document.getElementById('aiAdvisoryContent').innerHTML = loadingHtml;
-  document.getElementById('aiGrievancesContent').innerHTML = loadingHtml;
-
-  try {
-    const res = await fetch(`${API_BASE}/analyze-city?district=${encodeURIComponent(district)}`);
-    const data = await res.json();
-
-    if (data.error) {
-      const errorHtml = `<div class="ai-placeholder" style="color: var(--severe);">⚠️ ${data.error}</div>`;
-      document.getElementById('aiAnomalyContent').innerHTML = errorHtml;
-      document.getElementById('aiSourceContent').innerHTML = '<div class="ai-placeholder">—</div>';
-      document.getElementById('aiEnforcementContent').innerHTML = '<div class="ai-placeholder">—</div>';
-      document.getElementById('aiAdvisoryContent').innerHTML = '<div class="ai-placeholder">—</div>';
-      document.getElementById('aiGrievancesContent').innerHTML = '<div class="ai-placeholder">—</div>';
-      btn.textContent = '🤖 Retry Analysis';
-      btn.disabled = false;
-      return;
+    if (Clerk.user) {
+        window.location.href = "/dashboard.html";
+        return;
     }
 
-    renderAIResults(data);
-    btn.textContent = '✅ Analysis Complete';
-    setTimeout(() => { btn.textContent = '🤖 Re-run Analysis'; btn.disabled = false; }, 3000);
-
-  } catch (err) {
-    console.error('AI Analysis error:', err);
-    document.getElementById('aiAnomalyContent').innerHTML =
-      `<div class="ai-placeholder" style="color: var(--severe);">Failed to connect to backend. Ensure the server is running.</div>`;
-    btn.textContent = '🤖 Retry Analysis';
-    btn.disabled = false;
-  }
-}
-
-function renderAIResults(data) {
-  const ai = data.ai_analysis;
-
-  // ---- Anomaly Detector ----
-  const isHaz = ai.is_hazardous;
-  const badgeClass = isHaz ? 'hazardous' : 'safe';
-  const badgeLabel = isHaz ? '⚠️ HAZARDOUS' : '✅ SAFE';
-  let anomalyHtml = `
-    <div class="anomaly-badge ${badgeClass}">${badgeLabel}</div>
-    <div class="source-text">${ai.anomaly_summary}</div>
-    <div style="margin-top:8px; font-size:11px; color:var(--text-dim);">
-      Sensors analyzed: ${data.sensor_data.length} |
-      Max AQI: ${Math.max(...data.sensor_data.map(s => s.AQI))}
-    </div>`;
-  document.getElementById('aiAnomalyContent').innerHTML = anomalyHtml;
-
-  // ---- Source Attributor ----
-  let sourceHtml = '';
-  if (ai.identified_source && ai.identified_source !== 'N/A') {
-    sourceHtml = `
-      <div class="source-text">${ai.identified_source}</div>
-      <div style="margin-top:8px;">
-        <span style="font-size:11px; color:var(--text-dim);">Wind: </span>
-        <span class="mono" style="font-size:12px;">${data.weather.wind_direction} at ${data.weather.wind_speed_kmh} km/h</span>
-      </div>`;
-  } else {
-    sourceHtml = `<div class="ai-placeholder">${isHaz ? 'Source analysis requires GROQ_API_KEY' : 'No hazardous anomaly – source analysis not triggered'}</div>`;
-  }
-
-  // ---- Geospatial land-use attribution (construction vs traffic proximity) ----
-  // This comes straight from source_attribution.py / land_use_zones.json and is
-  // available regardless of GROQ_API_KEY, so it's rendered independently of the
-  // LLM's identified_source text above.
-  const geo = data.geospatial_attribution;
-  if (geo && geo.district_summary) {
-    const { dominant_source, construction_score, traffic_score } = geo.district_summary;
-    const total = construction_score + traffic_score;
-    const consPct = total > 0 ? Math.round((construction_score / total) * 100) : 0;
-    const trafPct = total > 0 ? 100 - consPct : 0;
-
-    // Merge per-station nearby zones into one deduped, ranked list
-    const zoneMap = {};
-    Object.values(geo.per_station || {}).forEach(stationData => {
-      (stationData.nearby_sources || []).forEach(z => {
-        if (!zoneMap[z.zone_name] || z.contribution_score > zoneMap[z.zone_name].contribution_score) {
-          zoneMap[z.zone_name] = z;
-        }
-      });
-    });
-    const topZones = Object.values(zoneMap)
-      .sort((a, b) => b.contribution_score - a.contribution_score)
-      .slice(0, 5);
-
-    sourceHtml += `
-      <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-        <div style="font-size:11px; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.3px;">
-          Land-Use Proximity (geospatial)
-        </div>`;
-
-    if (total > 0) {
-      sourceHtml += `
-        <div class="zone-score-legend">
-          <span>🏗️ Construction ${construction_score}</span>
-          <span>🚗 Traffic ${traffic_score}</span>
-        </div>
-        <div class="zone-score-track">
-          <div class="zone-score-fill construction" style="width:${consPct}%;"></div>
-          <div class="zone-score-fill traffic" style="width:${trafPct}%;"></div>
-        </div>
-        <div style="font-size:11.5px; margin:2px 0 8px;">
-          Dominant likely source:
-          <span class="grievance-type ${dominant_source}" style="margin-left:4px;">${dominant_source}</span>
-        </div>`;
-    } else {
-      sourceHtml += `<div class="ai-placeholder" style="padding:8px 0;">No construction/traffic zones within 8km of monitored stations</div>`;
-    }
-
-    if (topZones.length > 0) {
-      sourceHtml += `<div class="zone-list">` + topZones.map(z => `
-        <div class="zone-item">
-          <div>
-            <span class="zone-name">${z.zone_name}</span>
-            <span class="grievance-type ${z.source_type}" style="margin-left:6px;">${z.source_type}</span>
-          </div>
-          <div class="zone-meta">${z.distance_km} km · ${z.intensity} · score ${z.contribution_score}</div>
-        </div>`).join('') + `</div>`;
-    }
-
-    sourceHtml += `</div>`;
-  }
-
-  document.getElementById('aiSourceContent').innerHTML = sourceHtml;
-
-  // ---- Enforcement Order ----
-  const order = ai.enforcement_order;
-  if (order && Object.keys(order).length > 0) {
-    const priorityClass = order.Priority_Level || 'Medium';
-    document.getElementById('aiEnforcementContent').innerHTML = `
-      <div class="dispatch-order">
-        <div class="dispatch-row">
-          <span class="label">Priority</span>
-          <span class="priority-badge ${priorityClass}">${order.Priority_Level}</span>
-        </div>
-        <div class="dispatch-row">
-          <span class="label">Action</span>
-          <span class="value">${order.Action_Type}</span>
-        </div>
-        <div class="dispatch-row">
-          <span class="label">Department</span>
-          <span class="value">${order.Assigned_Department}</span>
-        </div>
-        <div class="dispatch-row">
-          <span class="label">Justification</span>
-          <span class="value" style="font-size:11px; font-weight:400;">${order.Justification}</span>
-        </div>
-      </div>`;
-  } else {
-    document.getElementById('aiEnforcementContent').innerHTML =
-      '<div class="ai-placeholder">No enforcement action needed</div>';
-  }
-
-  // ---- Public Advisory ----
-  const adv = data.public_advisory;
-  if (adv) {
-    const advColor = CATEGORY_COLORS[adv.severity] || 'var(--accent)';
-    document.getElementById('aiAdvisoryContent').innerHTML = `
-      <div class="advisory-box" style="border-left-color:${advColor};">
-        ${adv.message}
-      </div>
-      <div style="margin-top:8px;">
-        ${adv.recommended_actions.map(a => `<div style="font-size:11.5px; padding:2px 0; color:var(--text-dim);">→ ${a}</div>`).join('')}
-      </div>`;
-  }
-
-  // ---- Grievances ----
-  const grievances = data.grievances_considered;
-  if (grievances && grievances.length > 0) {
-    const typeClass = (t) => {
-      if (t.includes('Waste') || t.includes('Burning')) return 'waste';
-      if (t.includes('Construction')) return 'construction';
-      if (t.includes('Traffic') || t.includes('Vehicular')) return 'traffic';
-      return 'industrial';
+    document.getElementById("getStarted").onclick = () => {
+        Clerk.redirectToSignIn({
+            signInFallbackRedirectUrl: "/dashboard.html",
+            signUpFallbackRedirectUrl: "/dashboard.html"
+        });
     };
-    document.getElementById('aiGrievancesContent').innerHTML = grievances.map(g => `
-      <div class="grievance-item">
-        <span class="grievance-type ${typeClass(g.type)}">${g.type}</span>
-        <span style="color:var(--accent); font-weight:500;">${g.location}</span>
-        <div style="color:var(--text-dim); margin-top:2px; font-size:11px;">${g.description}</div>
-      </div>
-    `).join('');
-  } else {
-    document.getElementById('aiGrievancesContent').innerHTML =
-      '<div class="ai-placeholder">No grievances recorded for this district</div>';
-  }
-}
-
-// ===================================================================
-//  Main data load
-// ===================================================================
-async function loadDashboard() {
-  try {
-    const [boundariesRes, forecastRes, weatherRes] = await Promise.all([
-      fetch(`${API_BASE}/district-boundaries`),
-      fetch(`${API_BASE}/ward-forecast`),
-      fetch(`${API_BASE}/weather`)
-    ]);
-
-    const boundaries = await boundariesRes.json();
-    const forecastData = await forecastRes.json();
-    const weatherData = await weatherRes.json();
-
-    wardLookup = {};
-    forecastData.wards.forEach(w => { wardLookup[w.district] = w; });
-
-    // ---- Overall AQI (hero gauge) ----
-    const covered = forecastData.wards.filter(w => w.station_count > 0);
-    const overallCurrent = covered.length
-      ? Math.round(covered.reduce((s, w) => s + w.current_pm25, 0) / covered.length)
-      : null;
-    const overallCat = aqiCategory(overallCurrent);
-
-    document.getElementById('overallVal').textContent = overallCurrent != null ? overallCurrent : '--';
-    document.getElementById('overallCat').textContent = overallCat.toUpperCase();
-    document.getElementById('overallCat').style.color = CATEGORY_COLORS[overallCat];
-    document.getElementById('overallSub').textContent = `Across ${covered.length} of ${forecastData.wards.length} districts`;
-
-    const gaugeFraction = overallCurrent != null ? Math.min(overallCurrent / 400, 1) : 0;
-    const dash = gaugeFraction * GAUGE_CIRCUMFERENCE;
-    const gaugeEl = document.getElementById('gaugeFill');
-    gaugeEl.setAttribute('stroke-dasharray', `${dash} ${GAUGE_CIRCUMFERENCE}`);
-    gaugeEl.setAttribute('stroke', CATEGORY_COLORS[overallCat]);
-
-    // ---- Trend ----
-    const f1 = covered.length ? covered.reduce((s, w) => s + w.forecast["1_day"], 0) / covered.length : null;
-    const f2 = covered.length ? covered.reduce((s, w) => s + w.forecast["2_day"], 0) / covered.length : null;
-    const f3 = covered.length ? covered.reduce((s, w) => s + w.forecast["3_day"], 0) / covered.length : null;
-    drawTrend([overallCurrent, f1, f2, f3]);
-
-    // ---- Weather ----
-    if (weatherData.current) {
-      document.getElementById('tempVal').textContent = weatherData.current.temp_mean.toFixed(1) + '°C';
-      document.getElementById('humidVal').textContent = weatherData.current.humidity_mean.toFixed(0) + '%';
-      document.getElementById('windVal').textContent = weatherData.current.windspeed_mean.toFixed(1) + ' km/h';
-      // Compute compass direction
-      const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
-      const idx = Math.round(weatherData.current.winddirection_mean / 22.5) % 16;
-      document.getElementById('windDirVal').textContent = dirs[idx] + ' (' + weatherData.current.winddirection_mean.toFixed(0) + '°)';
-    }
-
-    // ---- Priority actions ----
-    renderPriorityActions(forecastData.wards);
-
-    // ---- Ward select dropdown ----
-    const select = document.getElementById('wardSelect');
-    covered.forEach(w => {
-      const opt = document.createElement('option');
-      opt.value = w.district;
-      opt.textContent = w.district + " Delhi";
-      select.appendChild(opt);
-    });
-
-    // ---- Map polygons ----
-    geoLayer = L.geoJSON(boundaries, {
-      style: (feature) => styleForDistrict(feature.properties.dtname),
-      onEachFeature: (feature, layer) => {
-        const districtName = feature.properties.dtname;
-        layer.on('click', () => {
-          selectedDistrict = districtName;
-          refreshMapStyles();
-          const ward = wardLookup[districtName] || { district: districtName, station_count: 0, recommended_actions: [] };
-          showWardPanel(ward);
-        });
-        layer.on('mouseover', () => layer.setStyle({ fillOpacity: 0.85 }));
-        layer.on('mouseout', () => {
-          if (districtName !== selectedDistrict) layer.setStyle({ fillOpacity: 0.6 });
-        });
-      }
-    }).addTo(map);
-
-    document.getElementById('loadingBanner').remove();
-    document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleTimeString('en-IN');
-
-  } catch (err) {
-    document.getElementById('loadingBanner').textContent = 'Failed to load dashboard — check console';
-    console.error(err);
-  }
-}
-
-loadDashboard();
+});
 </script>
+
 </body>
 </html>
