@@ -1106,7 +1106,15 @@
     // ===================================================================
     //  Map setup
     // ===================================================================
-    const map = L.map('map', { zoomControl: false, minZoom: 10.5 }).setView([28.6139, 77.2090], 10.5);
+    const map = L.map('map', {
+      zoomControl: false,
+      minZoom: 10.5,
+      maxBounds: [
+        [28.6139 - 0.9, 77.2090 - 1.0],
+        [28.6139 + 0.9, 77.2090 + 1.0]
+      ],
+      maxBoundsViscosity: 1.0
+    }).setView([28.6139, 77.2090], 10.5);
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
