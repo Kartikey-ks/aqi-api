@@ -974,7 +974,7 @@
         </div>
 
         <div class="float-panel legend-panel">
-          <div style="font-weight:600; margin-bottom:6px; font-size:12px;">1-day Forecast AQI</div>
+          <div style="font-weight:600; margin-bottom:6px; font-size:12px;">Current AQI</div>
           <div class="legend-row">
             <div class="legend-swatch" style="background:#4CAF50"></div>Good (0-50)
           </div>
@@ -1106,15 +1106,7 @@
     // ===================================================================
     //  Map setup
     // ===================================================================
-    const map = L.map('map', {
-      zoomControl: false,
-      minZoom: 10.5,
-      maxBounds: [
-        [28.6139 - 0.9, 77.2090 - 1.0],
-        [28.6139 + 0.9, 77.2090 + 1.0]
-      ],
-      maxBoundsViscosity: 1.0
-    }).setView([28.6139, 77.2090], 10.5);
+    const map = L.map('map', { zoomControl: false }).setView([28.6139, 77.2090], 10.5);
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
@@ -1161,7 +1153,7 @@
 
     function styleForDistrict(districtName) {
       const ward = wardLookup[districtName];
-      const category = ward ? ward.forecast_1day_category : "No data";
+      const category = ward ? ward.current_category : "No data";
       const isSelected = districtName === selectedDistrict;
       const hasIntervention = activeInterventions.some(iv => iv.ward === districtName);
       return {
