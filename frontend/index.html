@@ -24,16 +24,18 @@
             font-family: Inter, sans-serif;
         }
 
+        html, body {
+            height: 100%;
+        }
+
         body {
             background: #F0FAF3;
             color: #000000;
-            min-height: 100vh;
+            height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow-x: hidden;
-            overflow-y: auto;
-            padding: 40px 0;
+            overflow: hidden;
         }
 
         body::before {
@@ -61,7 +63,7 @@
             z-index: 2;
             max-width: 900px;
             text-align: center;
-            padding: 40px;
+            padding: 20px 40px;
         }
 
         .badge {
@@ -71,13 +73,13 @@
             border-radius: 50px;
             color: #2E6F40;
             font-size: 14px;
-            margin-bottom: 30px;
+            margin-bottom: 24px;
         }
 
         h1 {
-            font-size: 60px;
+            font-size: 52px;
             font-weight: 800;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
             line-height: 1.1;
         }
 
@@ -89,11 +91,11 @@
 
         .subtitle {
             color: #555555;
-            font-size: 20px;
-            line-height: 1.6;
+            font-size: 18px;
+            line-height: 1.5;
             max-width: 750px;
             margin: auto;
-            margin-bottom: 50px;
+            margin-bottom: 36px;
         }
 
         .buttons {
@@ -125,37 +127,44 @@
 
 
         .features {
-            margin-top: 70px;
+            margin-top: 40px;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 25px;
+            gap: 20px;
         }
 
         .card {
             background: #cfffdc;
-            padding: 25px;
+            padding: 18px;
             border-radius: 12px;
             border: 1px solid #C5E0CE;
         }
 
         .card h3 {
-            margin: 15px 0;
+            margin: 10px 0;
+            font-size: 16px;
         }
 
         .card p {
             color: #555555;
-            font-size: 15px;
-            line-height: 1.6;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
         .icon {
-            font-size: 40px;
+            font-size: 32px;
         }
 
         @media(max-width:800px) {
 
+            body {
+                height: auto;
+                overflow: auto;
+                padding: 40px 0;
+            }
+
             h1 {
-                font-size: 42px;
+                font-size: 38px;
             }
 
             .features {
@@ -163,7 +172,7 @@
             }
 
             .subtitle {
-                font-size: 17px;
+                font-size: 16px;
             }
 
         }
