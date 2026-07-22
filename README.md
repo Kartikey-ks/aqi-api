@@ -4,6 +4,8 @@ AeroGuard is an enterprise-grade, Agentic AI platform designed to help city admi
 
 By fusing continuous monitoring data, meteorological forecasts, and geospatial layers, this platform gives municipal bodies the intelligence to reduce pollution at the source rather than just measure it.
 
+Link to the deployed project: https://aqi-api-two.vercel.app/
+*This project has been deployed using Versel for frontend and Render for backend.
 ---
 
 ## 🚀 Solution Approach
